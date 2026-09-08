@@ -1569,3 +1569,101 @@ fieldset:disabled {
 .account-email {
   overflow-wrap: anywhere;
 }
+
+/* Account navigation reuses the existing surface, accent, and type scale. */
+.profile-text {
+  flex: 1;
+}
+.profile .account-email {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+.profile .avatar {
+  flex: 0 0 35px;
+}
+.profile .online-dot {
+  flex: 0 0 6px;
+}
+.account-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.account-trigger {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"] {
+  background: #eaf4ee;
+}
+.account-dropdown {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(300px, calc(100vw - 32px));
+  max-height: calc(100dvh - 115px);
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #e2e8e3;
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 8px 24px #172e321a;
+}
+.account-menu-identity {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 8px 16px;
+}
+.account-menu-identity strong {
+  display: block;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.account-menu-identity small {
+  display: block;
+  margin-top: 4px;
+  color: #7a8781;
+}
+.account-dropdown [role="menuitem"] {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  color: #456052;
+  font-size: var(--text-base);
+}
+.account-dropdown [role="menuitem"]:hover,
+.account-dropdown [role="menuitem"]:focus-visible {
+  background: #eaf4ee;
+  color: #26775b;
+}
+.account-dropdown [role="menuitem"]:focus-visible {
+  outline-offset: -2px;
+}
+.account-menu-divider {
+  height: 1px;
+  background: #e2e8e3;
+  margin: 6px 4px;
+}
+#account-heading:focus-visible,
+#page-title:focus-visible {
+  outline: 2px solid #26876b;
+  outline-offset: 4px;
+  border-radius: 3px;
+}

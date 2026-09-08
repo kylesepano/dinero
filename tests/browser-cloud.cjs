@@ -6,7 +6,8 @@ const fs = require("fs");
 const users = {
   a: {
     id: "a0000000-0000-4000-8000-000000000001",
-    email: "a@example.com",
+    email:
+      "a.very.long.account.address.for.sidebar.truncation.and.mobile.navigation@a-long-example-domain.example.com",
     aud: "authenticated",
     role: "authenticated",
   },
@@ -114,7 +115,10 @@ const errors = [];
       return respond({});
     if (url.pathname.endsWith("/user")) return respond(users.a);
     const auth = req.headers().authorization || "";
-    const who = auth.includes(jwt(users.b)) ? "b" : "a";
+    const tokenPayload = JSON.parse(
+      Buffer.from(auth.split(".")[1], "base64url").toString(),
+    );
+    const who = tokenPayload.sub === users.b.id ? "b" : "a";
     if (url.pathname.endsWith("/load_workspace")) {
       if (delayLoad) await new Promise((r) => setTimeout(r, 500));
       return respond(stores[who]);
@@ -275,19 +279,125 @@ const errors = [];
   const exported = JSON.parse(Buffer.concat(chunks).toString());
   assert.equal(exported.transactions[0].amount, 30075);
   exported.transactions[0].note = "Restored JSON expense";
-  await page
-    .getByLabel("Import JSON backup")
-    .setInputFiles({
-      name: "backup.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify(exported)),
-    });
+  await page.getByLabel("Import JSON backup").setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(exported)),
+  });
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await page
     .getByRole("status")
     .filter({ hasText: "Backup restored and verified in your cloud account." })
     .waitFor();
   assert.equal(stores.a.data.transactions[0].note, "Restored JSON expense");
+  for (const width of [1440, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: 950 });
+    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+    const trigger = page.getByRole("button", { name: "Open account menu" });
+    await trigger.click();
+    const menu = page.getByRole("menu", { name: "Account", exact: true });
+    await menu.waitFor();
+    assert.equal(await trigger.getAttribute("aria-expanded"), "true");
+    assert.equal(
+      await page.locator(".account-menu-identity strong").textContent(),
+      users.a.email,
+    );
+    assert.equal(
+      await page.locator(".account-dropdown").evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return (
+          box.left >= 0 &&
+          box.right <= innerWidth &&
+          el.scrollWidth <= el.clientWidth
+        );
+      }),
+      true,
+    );
+    await page.screenshot({
+      path: `${require("node:os").tmpdir()}/dinero-account-${width}.png`,
+    });
+    await page.keyboard.press("ArrowDown");
+    assert.equal(
+      await page
+        .getByRole("menuitem", { name: "Settings", exact: true })
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    await page.keyboard.press("End");
+    assert.equal(
+      await page
+        .getByRole("menuitem", { name: "Sign out", exact: true })
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Escape");
+    assert.equal(await menu.count(), 0);
+    assert.equal(
+      await trigger.evaluate((el) => el === document.activeElement),
+      true,
+    );
+    await page.keyboard.press("ArrowUp");
+    assert.equal(
+      await page
+        .getByRole("menuitem", { name: "Sign out", exact: true })
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    await page.keyboard.press("Tab");
+    assert.equal(await menu.count(), 0);
+    await trigger.click();
+    await page.mouse.click(2, 2);
+    assert.equal(await menu.count(), 0);
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Profile / Account" }).click();
+    assert.equal(await menu.count(), 0);
+    await page.waitForFunction(
+      () => document.activeElement?.id === "account-heading",
+    );
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page.waitForFunction(
+      () => document.activeElement?.id === "page-title",
+    );
+    assert.equal(await menu.count(), 0);
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+    );
+    if (width > 900) {
+      assert.equal(
+        await page.locator(".profile .account-email").getAttribute("title"),
+        users.a.email,
+      );
+      assert.equal(
+        await page
+          .locator(".profile .account-email")
+          .evaluate(
+            (el) =>
+              getComputedStyle(el).whiteSpace === "nowrap" &&
+              getComputedStyle(el).textOverflow === "ellipsis" &&
+              el.scrollWidth > el.clientWidth,
+          ),
+        true,
+      );
+      assert.equal(
+        await page.locator(".profile").evaluate((el) => {
+          const avatar = el.querySelector(".avatar").getBoundingClientRect();
+          const status = el
+            .querySelector(".online-dot")
+            .getBoundingClientRect();
+          return (
+            avatar.width === 35 &&
+            status.right <= el.getBoundingClientRect().right
+          );
+        }),
+        true,
+      );
+    }
+  }
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 950 });
     for (const name of [
@@ -353,7 +463,8 @@ const errors = [];
     .getByText("This local backup has already been imported", { exact: false })
     .waitFor();
   assert.equal(stores.a.data.transactions.length, 1);
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await page.getByRole("heading", { name: "Welcome back." }).waitFor();
   assert.equal(
     await page.getByText("Local legacy expense", { exact: true }).count(),

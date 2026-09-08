@@ -41,6 +41,7 @@ import {
 } from "./utils/finance";
 import { validateData } from "./utils/storage";
 import Modal from "./components/Modal";
+import AccountMenu from "./components/AccountMenu";
 import { SaveStatus } from "./components/SaveStatus";
 import LocalMigration from "./components/LocalMigration";
 import { fingerprint, prepareImport } from "./services/mapping";
@@ -407,9 +408,13 @@ export default function App({
               </p>
             </div>
             <div className="profile">
-              <span className="avatar">P</span>
-              <div>
-                <strong className="account-email">{email}</strong>
+              <span className="avatar" aria-hidden="true">
+                {email.trim().charAt(0).toUpperCase() || "P"}
+              </span>
+              <div className="profile-text min-w-0">
+                <strong className="account-email" title={email}>
+                  {email}
+                </strong>
                 <small>Cloud workspace</small>
               </div>
               <span className="online-dot" />
@@ -432,13 +437,32 @@ export default function App({
             >
               <CircleHelp size={19} />
             </button>
-            <span className="avatar small">P</span>
+            <AccountMenu
+              email={email}
+              onSignOut={onSignOut}
+              onAccount={() => {
+                setPage("Settings");
+                setNotice("");
+                requestAnimationFrame(() => {
+                  const heading = document.getElementById("account-heading");
+                  heading?.focus();
+                  heading?.scrollIntoView({ block: "center" });
+                });
+              }}
+              onSettings={() => {
+                setPage("Settings");
+                setNotice("");
+                requestAnimationFrame(() =>
+                  document.getElementById("page-title")?.focus(),
+                );
+              }}
+            />
           </header>
           <main>
             <div className="page-heading">
               <div>
                 <div className="eyebrow">A LITTLE CLARITY, EVERY DAY</div>
-                <h1>
+                <h1 id="page-title" tabIndex={-1}>
                   {page === "Dashboard"
                     ? "Your money, at a glance."
                     : page === "Budget"
@@ -829,7 +853,9 @@ export default function App({
               <div className="settings-stack">
                 <section className="card settings-card">
                   <div>
-                    <h2>Your account</h2>
+                    <h2 id="account-heading" tabIndex={-1}>
+                      Your account
+                    </h2>
                     <p className="account-email">{email}</p>
                   </div>
                   <button className="button secondary" onClick={onSignOut}>
@@ -916,7 +942,8 @@ export default function App({
                     <h2>Your private cloud workspace</h2>
                     <p>
                       Your records are stored in your Supabase account. Sign in
-                      on another device to access them. Export backups regularly.
+                      on another device to access them. Export backups
+                      regularly.
                     </p>
                   </div>
                   <ShieldCheck size={30} />
