@@ -1,0 +1,47 @@
+import type { Transaction } from "../types";
+export function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+export function validDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return false;
+  const d = new Date(`${value}T12:00:00`);
+  return (
+    !isNaN(d.getTime()) &&
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` ===
+      value
+  );
+}
+export function parseAmount(value: string) {
+  if (!/^\d{1,10}(\.\d{1,2})?$/.test(value.trim())) return null;
+  const [whole, fraction = ""] = value.trim().split(".");
+  const amount = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return amount > 0 && Number.isSafeInteger(amount) ? amount : null;
+}
+export function totals(transactions: Transaction[]) {
+  const income = transactions
+    .filter((t) => t.type === "income")
+    .reduce((s, t) => s + t.amount, 0);
+  const expense = transactions
+    .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + t.amount, 0);
+  return { income, expense, balance: income - expense };
+}
+export const money = (amount: number, currency: string) =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(amount / 100);
+export const monthLabel = (month: string) =>
+  new Date(`${month}-01T12:00:00`).toLocaleDateString("en", {
+    month: "long",
+    year: "numeric",
+  });
+export const dateLabel = (date: string) =>
+  new Date(`${date}T12:00:00`).toLocaleDateString("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
