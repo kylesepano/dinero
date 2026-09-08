@@ -4,6 +4,7 @@ export interface Category {
   name: string;
   type: TransactionType;
   color: string;
+  icon?: number;
 }
 export interface Transaction {
   id: string;

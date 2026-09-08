@@ -41,6 +41,9 @@ import {
 } from "./utils/finance";
 import { validateData } from "./utils/storage";
 import Modal from "./components/Modal";
+import { SaveStatus } from "./components/SaveStatus";
+import LocalMigration from "./components/LocalMigration";
+import { fingerprint, prepareImport } from "./services/mapping";
 
 type Page = "Dashboard" | "Transactions" | "Categories" | "Budget" | "Settings";
 const nav = [
@@ -52,11 +55,12 @@ const nav = [
 ] as const;
 const categoryIcons = [Coffee, ShoppingBag, Car, House, Sparkles, Heart];
 function CategoryIcon({ category }: { category?: Category }) {
-  const Icon = category?.id.startsWith("expense-")
-    ? categoryIcons[Number(category.id.split("-")[1])] || Shapes
-    : category?.type === "income"
-      ? Wallet
-      : Shapes;
+  const Icon =
+    category?.icon !== undefined
+      ? categoryIcons[category.icon] || Shapes
+      : category?.type === "income"
+        ? Wallet
+        : Shapes;
   return (
     <span
       className="category-icon"
@@ -70,8 +74,17 @@ function CategoryIcon({ category }: { category?: Category }) {
   );
 }
 
-export default function App() {
-  const { data, update, error } = useData();
+export default function App({
+  email,
+  ownerId,
+  onSignOut,
+}: {
+  email: string;
+  ownerId: string;
+  onSignOut: () => void;
+}) {
+  const { data, update, error, loading, saving, ready, retry, imports } =
+    useData(ownerId);
   const [page, setPage] = useState<Page>("Dashboard");
   const [month, setMonth] = useState(today().slice(0, 7));
   const [search, setSearch] = useState("");
@@ -87,7 +100,7 @@ export default function App() {
   const [confirmation, setConfirmation] = useState<{
     title: string;
     message: string;
-    action: () => void;
+    action: () => Promise<boolean>;
   } | null>(null);
   const [notice, setNotice] = useState("");
   const [budgetEditing, setBudgetEditing] = useState(false);
@@ -124,7 +137,7 @@ export default function App() {
       title: "Start with a clean slate?",
       message:
         "This removes the sample transactions and budget. Your own tracking starts with an empty dashboard.",
-      action: () => update(freshData()),
+      action: () => update(prepareImport(freshData())),
     });
   const removeTransaction = (t: Transaction) =>
     setConfirmation({
@@ -176,10 +189,19 @@ export default function App() {
         );
       setConfirmation({
         title: "Restore this backup?",
-        message: `Replace current data with ${parsed.transactions.length} transactions, categories, budgets, and preferences from this ${parsed.demo ? "demo" : "personal"} backup?`,
-        action: () => {
-          update(parsed);
-          setNotice("Backup restored successfully.");
+        message: `Replace cloud data for ${email} with ${parsed.transactions.length} transactions, ${parsed.categories.length} categories, ${parsed.budgets.length} budgets, and ${parsed.settings.currency} currency preferences from this ${parsed.demo ? "demo" : "personal"} backup?`,
+        action: async () => {
+          const hash = await fingerprint(parsed);
+          if (imports.includes(hash)) {
+            setNotice(
+              "This backup has already been imported into this account.",
+            );
+            return true;
+          }
+          const saved = await update(prepareImport(parsed), hash);
+          if (saved)
+            setNotice("Backup restored and verified in your cloud account.");
+          return saved;
         },
       });
     } catch (e) {
@@ -312,633 +334,717 @@ export default function App() {
       return `${c.color} ${start}% ${start + (c.total / summary.expense) * 100}%`;
     })
     .join(",");
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a
-          className="brand"
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            setPage("Dashboard");
-          }}
-        >
-          <span className="brand-mark">
-            <ChartNoAxesCombined size={24} />
-          </span>
-          dinero<span className="brand-dot">.</span>
-        </a>
-        <div className="workspace-label">PERSONAL WORKSPACE</div>
-        <nav aria-label="Main navigation">
-          {nav.map(({ name, icon: Icon }) => (
-            <button
-              key={name}
-              className={`nav-item ${page === name ? "active" : ""}`}
-              onClick={() => {
-                setPage(name);
-                setNotice("");
-              }}
-              aria-current={page === name ? "page" : undefined}
-            >
-              <Icon size={19} />
-              <span>{name}</span>
-              {page === name && <span className="nav-dot" />}
+  if (loading || !ready)
+    return (
+      <div className="auth-shell">
+        <section className="card auth-card">
+          <h1>dinero</h1>
+          <p role="status">
+            {loading
+              ? "Loading your cloud workspace..."
+              : "Your workspace could not be loaded."}
+          </p>
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          )}
+          <div className="auth-links">
+            {!loading && (
+              <button className="button primary" onClick={retry}>
+                Retry
+              </button>
+            )}
+            <button className="button secondary" onClick={onSignOut}>
+              Sign out
             </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="local-card">
-            <ShieldCheck size={24} />
-            <strong>Your money. Your space.</strong>
-            <p>Private by design. Your data stays right in this browser.</p>
           </div>
-          <div className="profile">
-            <span className="avatar">P</span>
-            <div>
-              <strong>Personal account</strong>
-              <small>Local workspace</small>
-            </div>
-            <span className="online-dot" />
-          </div>
-        </div>
-      </aside>
-      <div className="main-shell">
-        <header className="topbar">
-          <div className="breadcrumb">
-            Workspace <ChevronRight size={14} />
-            <strong>{page}</strong>
-          </div>
-          <span className="local-status">
-            <span className="online-dot" /> Stored on this device
-          </span>
-          <button
-            className="icon-button"
-            aria-label="About local storage"
-            onClick={() => setPage("Settings")}
+        </section>
+      </div>
+    );
+  return (
+    <SaveStatus.Provider value={{ saving, error }}>
+      <div className="app-shell">
+        <aside className="sidebar" inert={saving}>
+          <a
+            className="brand"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setPage("Dashboard");
+            }}
           >
-            <CircleHelp size={19} />
-          </button>
-          <span className="avatar small">P</span>
-        </header>
-        <main>
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">A LITTLE CLARITY, EVERY DAY</div>
-              <h1>
-                {page === "Dashboard"
-                  ? "Your money, at a glance."
-                  : page === "Budget"
-                    ? "Make room for what matters."
-                    : page === "Transactions"
-                      ? "Every little detail."
-                      : page === "Categories"
-                        ? "A place for every peso."
-                        : "Your space, your preferences."}
-              </h1>
+            <span className="brand-mark">
+              <ChartNoAxesCombined size={24} />
+            </span>
+            dinero<span className="brand-dot">.</span>
+          </a>
+          <div className="workspace-label">PERSONAL WORKSPACE</div>
+          <nav aria-label="Main navigation">
+            {nav.map(({ name, icon: Icon }) => (
+              <button
+                key={name}
+                className={`nav-item ${page === name ? "active" : ""}`}
+                onClick={() => {
+                  setPage(name);
+                  setNotice("");
+                }}
+                aria-current={page === name ? "page" : undefined}
+              >
+                <Icon size={19} />
+                <span>{name}</span>
+                {page === name && <span className="nav-dot" />}
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
+            <div className="local-card">
+              <ShieldCheck size={24} />
+              <strong>Your money. Your space.</strong>
               <p>
-                {page === "Dashboard"
-                  ? "A clear picture of where you stand and where your money goes."
-                  : page === "Transactions"
-                    ? "Keep your income and expenses organized, all in one place."
-                    : page === "Categories"
-                      ? "Organize your transactions in a way that makes sense to you."
-                      : page === "Budget"
-                        ? "Build a spending plan that works for your everyday life."
-                        : "Manage your preferences and keep your data in your hands."}
+                Private by design. Your records belong to your signed-in
+                account.
               </p>
             </div>
-            {(page === "Dashboard" || page === "Transactions") && (
-              <button
-                className="button primary"
-                onClick={() => setTransaction(null)}
-              >
-                <Plus size={18} /> Add transaction
-              </button>
-            )}
-            {page === "Categories" && (
-              <button
-                className="button primary"
-                onClick={() => setEditingCategory(null)}
-              >
-                <Plus size={18} />
-                Add category
-              </button>
-            )}
+            <div className="profile">
+              <span className="avatar">P</span>
+              <div>
+                <strong className="account-email">{email}</strong>
+                <small>Cloud workspace</small>
+              </div>
+              <span className="online-dot" />
+            </div>
           </div>
-          {error && (
-            <div role="alert" className="notice warning">
-              {error}
+        </aside>
+        <div className="main-shell" inert={saving}>
+          <header className="topbar">
+            <div className="breadcrumb">
+              Workspace <ChevronRight size={14} />
+              <strong>{page}</strong>
             </div>
-          )}
-          {notice && (
-            <div role="status" className="notice">
-              {notice}
-              <button
-                onClick={() => setNotice("")}
-                aria-label="Dismiss notification"
-              >
-                ×
-              </button>
+            <span className="local-status">
+              <span className="online-dot" /> Cloud workspace
+            </span>
+            <button
+              className="icon-button"
+              aria-label="About cloud storage"
+              onClick={() => setPage("Settings")}
+            >
+              <CircleHelp size={19} />
+            </button>
+            <span className="avatar small">P</span>
+          </header>
+          <main>
+            <div className="page-heading">
+              <div>
+                <div className="eyebrow">A LITTLE CLARITY, EVERY DAY</div>
+                <h1>
+                  {page === "Dashboard"
+                    ? "Your money, at a glance."
+                    : page === "Budget"
+                      ? "Make room for what matters."
+                      : page === "Transactions"
+                        ? "Every little detail."
+                        : page === "Categories"
+                          ? "A place for every peso."
+                          : "Your space, your preferences."}
+                </h1>
+                <p>
+                  {page === "Dashboard"
+                    ? "A clear picture of where you stand and where your money goes."
+                    : page === "Transactions"
+                      ? "Keep your income and expenses organized, all in one place."
+                      : page === "Categories"
+                        ? "Organize your transactions in a way that makes sense to you."
+                        : page === "Budget"
+                          ? "Build a spending plan that works for your everyday life."
+                          : "Manage your preferences and keep your data in your hands."}
+                </p>
+              </div>
+              {(page === "Dashboard" || page === "Transactions") && (
+                <button
+                  className="button primary"
+                  onClick={() => setTransaction(null)}
+                >
+                  <Plus size={18} /> Add transaction
+                </button>
+              )}
+              {page === "Categories" && (
+                <button
+                  className="button primary"
+                  onClick={() => setEditingCategory(null)}
+                >
+                  <Plus size={18} />
+                  Add category
+                </button>
+              )}
             </div>
-          )}
-          {data.demo && (
-            <div className="demo-banner">
-              <span>
-                <Sparkles size={16} />
-                <strong>You’re exploring demo data.</strong> Take a look around,
-                then make it yours.
-              </span>
-              <button onClick={startFresh}>
-                Start fresh <ArrowRight size={15} />
-              </button>
-            </div>
-          )}
-          {(page === "Dashboard" ||
-            page === "Transactions" ||
-            page === "Budget") && (
-            <div className="period-row">
-              <h2>
-                {page === "Dashboard"
-                  ? "Monthly overview"
-                  : page === "Budget"
-                    ? "Your monthly plan"
-                    : "All transactions"}{" "}
-                <span className="subtle-pill">{monthLabel(month)}</span>
-              </h2>
-              <label className="month-picker">
-                <CalendarDays size={16} />
-                <input
-                  aria-label="Select month"
-                  type="month"
-                  value={month}
-                  onChange={(e) => {
-                    if (e.target.value) setMonth(e.target.value);
+            {error && (
+              <div role="alert" className="notice warning">
+                {error}
+              </div>
+            )}
+            {error && (
+              <div className="notice cloud-status">
+                <span>
+                  Reload cloud data before retrying an uncertain save. This
+                  discards unsaved form edits.
+                </span>
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setTransaction(undefined);
+                    setEditingCategory(undefined);
+                    setBudgetEditing(false);
+                    setConfirmation(null);
+                    retry();
                   }}
-                />
-              </label>
-            </div>
-          )}
-          {page === "Dashboard" && (
-            <>
-              <div className="stats-grid">
-                {[
-                  {
-                    name: "Total income",
-                    value: summary.income,
-                    icon: ArrowDownLeft,
-                    subtitle: "All money coming in",
-                    className: "income",
-                  },
-                  {
-                    name: "Total expenses",
-                    value: summary.expense,
-                    icon: ArrowUpRight,
-                    subtitle: "All money going out",
-                    className: "expense",
-                  },
-                  {
-                    name: "Current balance",
-                    value: summary.balance,
-                    icon: Wallet,
-                    subtitle: "Income minus expenses this month",
-                    className: "balance",
-                  },
-                  {
-                    name: "Budget remaining",
-                    value: budget - summary.expense,
-                    icon: ChartNoAxesCombined,
-                    subtitle: budget
-                      ? `Of ${fmt(budget)} monthly budget`
-                      : "No monthly budget set",
-                    className: "budget",
-                  },
-                ].map(({ name, value, icon: Icon, subtitle, className }) => (
-                  <section key={name} className={`stat-card ${className}`}>
-                    <div className="stat-top">
-                      <span>{name}</span>
-                      <span className="stat-icon">
-                        <Icon size={19} />
-                      </span>
-                    </div>
-                    <strong className="stat-value">{fmt(value)}</strong>
-                    <small>{subtitle}</small>
-                  </section>
-                ))}
+                >
+                  Reload cloud data
+                </button>
               </div>
-              <div className="dashboard-middle">
-                <section className="card spending-card">
-                  <div className="card-heading">
-                    <div>
-                      <h2>Where your money goes</h2>
-                      <p>Spending by category</p>
-                    </div>
-                    <span className="badge">This month</span>
-                  </div>
-                  {spending.length ? (
-                    <div className="spending-content">
-                      <div
-                        className="donut"
-                        style={{ background: `conic-gradient(${gradient})` }}
-                        role="img"
-                        aria-label={`Spending by category: ${spending.map((c) => `${c.name} ${fmt(c.total)}`).join(", ")}`}
-                      >
-                        <div>
-                          <span>Total spent</span>
-                          <strong>{fmt(summary.expense)}</strong>
-                          <small>{spending.length} categories</small>
-                        </div>
-                      </div>
-                      <div className="legend">
-                        {spending.map((c) => (
-                          <div key={c.id}>
-                            <span className="legend-label">
-                              <i style={{ background: c.color }} />
-                              {c.name}
-                            </span>
-                            <strong>{fmt(c.total)}</strong>
-                            <span className="muted">
-                              {Math.round((c.total / summary.expense) * 100)}%
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="empty">
-                      <ChartNoAxesCombined size={30} />
-                      <h3>A fresh start</h3>
-                      <p>
-                        Your spending breakdown will appear after your first
-                        expense.
-                      </p>
-                    </div>
-                  )}
-                </section>
-                <section className="card budget-card">
-                  <div className="card-heading">
-                    <div>
-                      <h2>Monthly budget</h2>
-                      <p>A little planning goes a long way.</p>
-                    </div>
-                    <span className="soft-icon">
-                      <ChartNoAxesCombined size={20} />
-                    </span>
-                  </div>
-                  {budgetContent()}
-                  <button
-                    className="text-link"
-                    onClick={() => setPage("Budget")}
-                  >
-                    Manage budget <ArrowRight size={16} />
-                  </button>
-                </section>
+            )}
+            {notice && (
+              <div role="status" className="notice">
+                {notice}
+                <button
+                  onClick={() => setNotice("")}
+                  aria-label="Dismiss notification"
+                >
+                  ×
+                </button>
               </div>
-              <section className="card recent">
-                <div className="card-heading">
-                  <div>
-                    <h2>Recent transactions</h2>
-                    <p>Your latest money moves.</p>
-                  </div>
-                  <button
-                    className="text-link"
-                    onClick={() => setPage("Transactions")}
-                  >
-                    View all transactions <ArrowRight size={16} />
-                  </button>
-                </div>
-                {transactionTable(
-                  [...monthly].sort((a, b) => b.date.localeCompare(a.date)),
-                  5,
-                )}
-              </section>
-              <div className="footer-note">
-                <ShieldCheck size={14} /> A little awareness today. A healthier
-                financial tomorrow.
+            )}
+            {data.demo && (
+              <div className="demo-banner">
+                <span>
+                  <Sparkles size={16} />
+                  <strong>You’re exploring demo data.</strong> Take a look
+                  around, then make it yours.
+                </span>
+                <button onClick={startFresh}>
+                  Start fresh <ArrowRight size={15} />
+                </button>
               </div>
-            </>
-          )}
-          {page === "Transactions" && (
-            <section className="card">
-              <div className="filters">
-                <label className="search">
-                  <Search size={18} />
+            )}
+            {(page === "Dashboard" ||
+              page === "Transactions" ||
+              page === "Budget") && (
+              <div className="period-row">
+                <h2>
+                  {page === "Dashboard"
+                    ? "Monthly overview"
+                    : page === "Budget"
+                      ? "Your monthly plan"
+                      : "All transactions"}{" "}
+                  <span className="subtle-pill">{monthLabel(month)}</span>
+                </h2>
+                <label className="month-picker">
+                  <CalendarDays size={16} />
                   <input
-                    placeholder="Search transactions…"
-                    aria-label="Search transactions"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    aria-label="Select month"
+                    type="month"
+                    value={month}
+                    onChange={(e) => {
+                      if (e.target.value) setMonth(e.target.value);
+                    }}
                   />
                 </label>
-                <select
-                  aria-label="Filter by type"
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                >
-                  <option value="all">All types</option>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                </select>
-                <select
-                  aria-label="Filter by category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                >
-                  <option value="all">All categories</option>
-                  {data.categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
+              </div>
+            )}
+            {page === "Dashboard" && (
+              <>
+                <div className="stats-grid">
+                  {[
+                    {
+                      name: "Total income",
+                      value: summary.income,
+                      icon: ArrowDownLeft,
+                      subtitle: "All money coming in",
+                      className: "income",
+                    },
+                    {
+                      name: "Total expenses",
+                      value: summary.expense,
+                      icon: ArrowUpRight,
+                      subtitle: "All money going out",
+                      className: "expense",
+                    },
+                    {
+                      name: "Current balance",
+                      value: summary.balance,
+                      icon: Wallet,
+                      subtitle: "Income minus expenses this month",
+                      className: "balance",
+                    },
+                    {
+                      name: "Budget remaining",
+                      value: budget - summary.expense,
+                      icon: ChartNoAxesCombined,
+                      subtitle: budget
+                        ? `Of ${fmt(budget)} monthly budget`
+                        : "No monthly budget set",
+                      className: "budget",
+                    },
+                  ].map(({ name, value, icon: Icon, subtitle, className }) => (
+                    <section key={name} className={`stat-card ${className}`}>
+                      <div className="stat-top">
+                        <span>{name}</span>
+                        <span className="stat-icon">
+                          <Icon size={19} />
+                        </span>
+                      </div>
+                      <strong className="stat-value">{fmt(value)}</strong>
+                      <small>{subtitle}</small>
+                    </section>
                   ))}
-                </select>
-                <select
-                  aria-label="Sort by date"
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value)}
-                >
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                </select>
-              </div>
-              {transactionTable(filtered)}
-              <div className="table-footer">
-                {filtered.length} transaction{filtered.length === 1 ? "" : "s"}{" "}
-                · {monthLabel(month)}
-              </div>
-            </section>
-          )}
-          {page === "Categories" && (
-            <>
-              {(["expense", "income"] as const).map((kind) => (
-                <section className="category-section" key={kind}>
-                  <h2>
-                    {kind === "expense" ? "Expense" : "Income"} categories{" "}
-                    <span className="subtle-pill">
-                      {data.categories.filter((c) => c.type === kind).length}
-                    </span>
-                  </h2>
-                  <div className="categories-grid">
-                    {data.categories
-                      .filter((c) => c.type === kind)
-                      .map((c) => (
-                        <div className="card category-card" key={c.id}>
-                          <CategoryIcon category={c} />
+                </div>
+                <div className="dashboard-middle">
+                  <section className="card spending-card">
+                    <div className="card-heading">
+                      <div>
+                        <h2>Where your money goes</h2>
+                        <p>Spending by category</p>
+                      </div>
+                      <span className="badge">This month</span>
+                    </div>
+                    {spending.length ? (
+                      <div className="spending-content">
+                        <div
+                          className="donut"
+                          style={{ background: `conic-gradient(${gradient})` }}
+                          role="img"
+                          aria-label={`Spending by category: ${spending.map((c) => `${c.name} ${fmt(c.total)}`).join(", ")}`}
+                        >
                           <div>
-                            <h3>{c.name}</h3>
-                            <p>
-                              {
-                                data.transactions.filter(
-                                  (t) => t.categoryId === c.id,
-                                ).length
-                              }{" "}
-                              transactions
-                            </p>
-                          </div>
-                          <div className="row-actions">
-                            <button
-                              className="icon-button"
-                              aria-label={`Edit ${c.name}`}
-                              onClick={() => setEditingCategory(c)}
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              className="icon-button"
-                              aria-label={`Delete ${c.name}`}
-                              onClick={() => removeCategory(c)}
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            <span>Total spent</span>
+                            <strong>{fmt(summary.expense)}</strong>
+                            <small>{spending.length} categories</small>
                           </div>
                         </div>
-                      ))}
+                        <div className="legend">
+                          {spending.map((c) => (
+                            <div key={c.id}>
+                              <span className="legend-label">
+                                <i style={{ background: c.color }} />
+                                {c.name}
+                              </span>
+                              <strong>{fmt(c.total)}</strong>
+                              <span className="muted">
+                                {Math.round((c.total / summary.expense) * 100)}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="empty">
+                        <ChartNoAxesCombined size={30} />
+                        <h3>A fresh start</h3>
+                        <p>
+                          Your spending breakdown will appear after your first
+                          expense.
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                  <section className="card budget-card">
+                    <div className="card-heading">
+                      <div>
+                        <h2>Monthly budget</h2>
+                        <p>A little planning goes a long way.</p>
+                      </div>
+                      <span className="soft-icon">
+                        <ChartNoAxesCombined size={20} />
+                      </span>
+                    </div>
+                    {budgetContent()}
+                    <button
+                      className="text-link"
+                      onClick={() => setPage("Budget")}
+                    >
+                      Manage budget <ArrowRight size={16} />
+                    </button>
+                  </section>
+                </div>
+                <section className="card recent">
+                  <div className="card-heading">
+                    <div>
+                      <h2>Recent transactions</h2>
+                      <p>Your latest money moves.</p>
+                    </div>
+                    <button
+                      className="text-link"
+                      onClick={() => setPage("Transactions")}
+                    >
+                      View all transactions <ArrowRight size={16} />
+                    </button>
                   </div>
+                  {transactionTable(
+                    [...monthly].sort((a, b) => b.date.localeCompare(a.date)),
+                    5,
+                  )}
                 </section>
-              ))}
-            </>
-          )}
-          {page === "Budget" && (
-            <div className="budget-layout">
+                <div className="footer-note">
+                  <ShieldCheck size={14} /> A little awareness today. A
+                  healthier financial tomorrow.
+                </div>
+              </>
+            )}
+            {page === "Transactions" && (
               <section className="card">
-                <div className="card-heading">
-                  <div>
-                    <h2>{monthLabel(month)} budget</h2>
-                    <p>Give every peso a purpose.</p>
-                  </div>
-                  <button
-                    className="button secondary"
-                    onClick={() => setBudgetEditing(true)}
-                  >
-                    <Pencil size={16} />
-                    {budget ? "Edit budget" : "Set budget"}
-                  </button>
-                </div>
-                <div className="budget-detail">{budgetContent()}</div>
-              </section>
-              <section className="card budget-advice">
-                <span className="soft-icon">
-                  <TrendingUp size={24} />
-                </span>
-                <h2>Small steps. Lasting habits.</h2>
-                <p>
-                  Choose a realistic spending limit for the month. Every expense
-                  you record automatically updates your remaining budget.
-                </p>
-                <p>
-                  Budgets are saved separately for each month, so you can adjust
-                  your plan as life changes.
-                </p>
-              </section>
-            </div>
-          )}
-          {page === "Settings" && (
-            <div className="settings-stack">
-              <section className="card settings-card">
-                <div>
-                  <h2>Currency</h2>
-                  <p>
-                    Choose how amounts are displayed. This does not convert
-                    existing amounts.
-                  </p>
-                </div>
-                <select
-                  aria-label="Currency preference"
-                  value={data.settings.currency}
-                  onChange={(e) =>
-                    update({
-                      ...data,
-                      settings: {
-                        currency: e.target
-                          .value as typeof data.settings.currency,
-                      },
-                    })
-                  }
-                >
-                  {[
-                    ["PHP", "PHP — Philippine peso"],
-                    ["USD", "USD — US dollar"],
-                    ["EUR", "EUR — Euro"],
-                    ["SGD", "SGD — Singapore dollar"],
-                  ].map(([v, l]) => (
-                    <option value={v} key={v}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </section>
-              <section className="card">
-                <div className="card-heading">
-                  <div>
-                    <h2>Your data, in your hands</h2>
-                    <p>
-                      Download a full backup or restore a previous dinero
-                      export.
-                    </p>
-                  </div>
-                  <ShieldCheck size={24} />
-                </div>
-                <div className="settings-actions">
-                  <button className="button secondary" onClick={exportData}>
-                    <Download size={17} />
-                    Export JSON backup
-                  </button>
-                  <label className="button secondary import-button">
-                    <Upload size={17} />
-                    Import JSON backup
+                <div className="filters">
+                  <label className="search">
+                    <Search size={18} />
                     <input
-                      type="file"
-                      accept=".json,application/json"
-                      aria-label="Import JSON backup"
-                      onChange={(e) => {
-                        void importData(e.target.files?.[0]);
-                        e.target.value = "";
-                      }}
+                      placeholder="Search transactions…"
+                      aria-label="Search transactions"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
                     />
                   </label>
+                  <select
+                    aria-label="Filter by type"
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                  >
+                    <option value="all">All types</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                  </select>
+                  <select
+                    aria-label="Filter by category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                  >
+                    <option value="all">All categories</option>
+                    {data.categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Sort by date"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                  </select>
                 </div>
-                <p className="settings-description">
-                  Backups include transactions, categories, monthly budgets, and
-                  your currency preference. Importing replaces the current
-                  workspace.
-                </p>
+                {transactionTable(filtered)}
+                <div className="table-footer">
+                  {filtered.length} transaction
+                  {filtered.length === 1 ? "" : "s"} · {monthLabel(month)}
+                </div>
               </section>
-              <section className="card settings-card">
-                <div>
-                  <h2>Local by design</h2>
+            )}
+            {page === "Categories" && (
+              <>
+                {(["expense", "income"] as const).map((kind) => (
+                  <section className="category-section" key={kind}>
+                    <h2>
+                      {kind === "expense" ? "Expense" : "Income"} categories{" "}
+                      <span className="subtle-pill">
+                        {data.categories.filter((c) => c.type === kind).length}
+                      </span>
+                    </h2>
+                    <div className="categories-grid">
+                      {data.categories
+                        .filter((c) => c.type === kind)
+                        .map((c) => (
+                          <div className="card category-card" key={c.id}>
+                            <CategoryIcon category={c} />
+                            <div>
+                              <h3>{c.name}</h3>
+                              <p>
+                                {
+                                  data.transactions.filter(
+                                    (t) => t.categoryId === c.id,
+                                  ).length
+                                }{" "}
+                                transactions
+                              </p>
+                            </div>
+                            <div className="row-actions">
+                              <button
+                                className="icon-button"
+                                aria-label={`Edit ${c.name}`}
+                                onClick={() => setEditingCategory(c)}
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                className="icon-button"
+                                aria-label={`Delete ${c.name}`}
+                                onClick={() => removeCategory(c)}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </section>
+                ))}
+              </>
+            )}
+            {page === "Budget" && (
+              <div className="budget-layout">
+                <section className="card">
+                  <div className="card-heading">
+                    <div>
+                      <h2>{monthLabel(month)} budget</h2>
+                      <p>Give every peso a purpose.</p>
+                    </div>
+                    <button
+                      className="button secondary"
+                      onClick={() => setBudgetEditing(true)}
+                    >
+                      <Pencil size={16} />
+                      {budget ? "Edit budget" : "Set budget"}
+                    </button>
+                  </div>
+                  <div className="budget-detail">{budgetContent()}</div>
+                </section>
+                <section className="card budget-advice">
+                  <span className="soft-icon">
+                    <TrendingUp size={24} />
+                  </span>
+                  <h2>Small steps. Lasting habits.</h2>
                   <p>
-                    Your data is stored in this browser’s localStorage. It is
-                    not synced between devices. Clearing browser data removes
-                    it, so export backups regularly.
+                    Choose a realistic spending limit for the month. Every
+                    expense you record automatically updates your remaining
+                    budget.
                   </p>
-                </div>
-                <ShieldCheck size={30} />
-              </section>
-              <section className="card settings-card danger-zone">
-                <div>
-                  <h2>Clear all local data</h2>
                   <p>
-                    Remove all transactions, custom categories, budgets, and
-                    preferences.
+                    Budgets are saved separately for each month, so you can
+                    adjust your plan as life changes.
                   </p>
-                </div>
-                <button
-                  className="button danger"
-                  onClick={() =>
-                    setConfirmation({
-                      title: "Clear all local data?",
-                      message:
-                        "This cannot be undone. Export a backup first if you want to keep your records. The app will reset to an empty workspace with default categories and PHP currency.",
-                      action: () => {
-                        update(freshData());
-                        setNotice("Your local workspace has been reset.");
-                      },
-                    })
+                </section>
+              </div>
+            )}
+            {page === "Settings" && (
+              <div className="settings-stack">
+                <section className="card settings-card">
+                  <div>
+                    <h2>Your account</h2>
+                    <p className="account-email">{email}</p>
+                  </div>
+                  <button className="button secondary" onClick={onSignOut}>
+                    Sign out
+                  </button>
+                </section>
+                <LocalMigration
+                  email={email}
+                  cloud={data}
+                  imports={imports}
+                  onImport={update}
+                />
+                <section className="card settings-card">
+                  <div>
+                    <h2>Currency</h2>
+                    <p>
+                      Choose how amounts are displayed. This does not convert
+                      existing amounts.
+                    </p>
+                  </div>
+                  <select
+                    aria-label="Currency preference"
+                    value={data.settings.currency}
+                    onChange={(e) =>
+                      update({
+                        ...data,
+                        settings: {
+                          currency: e.target
+                            .value as typeof data.settings.currency,
+                        },
+                      })
+                    }
+                  >
+                    {[
+                      ["PHP", "PHP — Philippine peso"],
+                      ["USD", "USD — US dollar"],
+                      ["EUR", "EUR — Euro"],
+                      ["SGD", "SGD — Singapore dollar"],
+                    ].map(([v, l]) => (
+                      <option value={v} key={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </section>
+                <section className="card">
+                  <div className="card-heading">
+                    <div>
+                      <h2>Your data, in your hands</h2>
+                      <p>
+                        Download a full backup or restore a previous dinero
+                        export.
+                      </p>
+                    </div>
+                    <ShieldCheck size={24} />
+                  </div>
+                  <div className="settings-actions">
+                    <button className="button secondary" onClick={exportData}>
+                      <Download size={17} />
+                      Export JSON backup
+                    </button>
+                    <label className="button secondary import-button">
+                      <Upload size={17} />
+                      Import JSON backup
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        aria-label="Import JSON backup"
+                        onChange={(e) => {
+                          void importData(e.target.files?.[0]);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <p className="settings-description">
+                    Backups include transactions, categories, monthly budgets,
+                    and your currency preference. Importing replaces the current
+                    workspace.
+                  </p>
+                </section>
+                <section className="card settings-card">
+                  <div>
+                    <h2>Your private cloud workspace</h2>
+                    <p>
+                      Your records are stored in your Supabase account. Sign in
+                      on another device to access them. Export backups regularly.
+                    </p>
+                  </div>
+                  <ShieldCheck size={30} />
+                </section>
+                <section className="card settings-card danger-zone">
+                  <div>
+                    <h2>Clear cloud account data</h2>
+                    <p>
+                      Remove all transactions, custom categories, budgets, and
+                      preferences.
+                    </p>
+                  </div>
+                  <button
+                    className="button danger"
+                    onClick={() =>
+                      setConfirmation({
+                        title: "Clear cloud account data?",
+                        message:
+                          "This deletes the financial records in this signed-in cloud account and restores default categories and PHP currency. Export a backup first. Your login account and original local backup are not deleted.",
+                        action: async () => {
+                          const saved = await update(
+                            prepareImport(freshData()),
+                          );
+                          if (saved)
+                            setNotice(
+                              "Your cloud financial workspace has been reset. The original local backup is preserved.",
+                            );
+                          return saved;
+                        },
+                      })
+                    }
+                  >
+                    <Trash2 size={16} />
+                    Clear data
+                  </button>
+                </section>
+              </div>
+            )}
+          </main>
+        </div>
+        {transaction !== undefined && (
+          <TransactionForm
+            transaction={transaction}
+            categories={data.categories}
+            currency={data.settings.currency}
+            onClose={() => setTransaction(undefined)}
+            onSave={async (t) => {
+              const saved = await update({
+                ...data,
+                transactions: transaction
+                  ? data.transactions.map((x) => (x.id === t.id ? t : x))
+                  : [...data.transactions, t],
+              });
+              if (saved) setTransaction(undefined);
+            }}
+          />
+        )}
+        {editingCategory !== undefined && (
+          <CategoryForm
+            category={editingCategory}
+            categories={data.categories}
+            used={
+              !!editingCategory &&
+              data.transactions.some((t) => t.categoryId === editingCategory.id)
+            }
+            onClose={() => setEditingCategory(undefined)}
+            onSave={async (c) => {
+              const saved = await update({
+                ...data,
+                categories: editingCategory
+                  ? data.categories.map((x) => (x.id === c.id ? c : x))
+                  : [...data.categories, c],
+              });
+              if (saved) setEditingCategory(undefined);
+            }}
+          />
+        )}
+        {budgetEditing && (
+          <BudgetForm
+            amount={budget}
+            currency={data.settings.currency}
+            onClose={() => setBudgetEditing(false)}
+            onSave={async (amount) => {
+              const saved = await update({
+                ...data,
+                budgets: [
+                  ...data.budgets.filter((b) => b.month !== month),
+                  { month, amount },
+                ],
+              });
+              if (saved) setBudgetEditing(false);
+            }}
+          />
+        )}
+        {confirmation && (
+          <Modal
+            title={confirmation.title}
+            onClose={() => setConfirmation(null)}
+          >
+            <p className="modal-description">{confirmation.message}</p>
+            <div className="modal-actions">
+              <button
+                className="button secondary"
+                onClick={() => setConfirmation(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="button danger"
+                onClick={async () => {
+                  try {
+                    if (await confirmation.action()) setConfirmation(null);
+                  } catch (e) {
+                    setNotice(
+                      e instanceof Error
+                        ? e.message
+                        : "Operation failed. Please retry.",
+                    );
                   }
-                >
-                  <Trash2 size={16} />
-                  Clear data
-                </button>
-              </section>
+                }}
+              >
+                Confirm
+              </button>
             </div>
-          )}
-        </main>
+          </Modal>
+        )}
       </div>
-      {transaction !== undefined && (
-        <TransactionForm
-          transaction={transaction}
-          categories={data.categories}
-          currency={data.settings.currency}
-          onClose={() => setTransaction(undefined)}
-          onSave={(t) => {
-            update({
-              ...data,
-              transactions: transaction
-                ? data.transactions.map((x) => (x.id === t.id ? t : x))
-                : [...data.transactions, t],
-            });
-            setTransaction(undefined);
-          }}
-        />
-      )}
-      {editingCategory !== undefined && (
-        <CategoryForm
-          category={editingCategory}
-          categories={data.categories}
-          used={
-            !!editingCategory &&
-            data.transactions.some((t) => t.categoryId === editingCategory.id)
-          }
-          onClose={() => setEditingCategory(undefined)}
-          onSave={(c) => {
-            update({
-              ...data,
-              categories: editingCategory
-                ? data.categories.map((x) => (x.id === c.id ? c : x))
-                : [...data.categories, c],
-            });
-            setEditingCategory(undefined);
-          }}
-        />
-      )}
-      {budgetEditing && (
-        <BudgetForm
-          amount={budget}
-          currency={data.settings.currency}
-          onClose={() => setBudgetEditing(false)}
-          onSave={(amount) => {
-            update({
-              ...data,
-              budgets: [
-                ...data.budgets.filter((b) => b.month !== month),
-                { month, amount },
-              ],
-            });
-            setBudgetEditing(false);
-          }}
-        />
-      )}
-      {confirmation && (
-        <Modal title={confirmation.title} onClose={() => setConfirmation(null)}>
-          <p className="modal-description">{confirmation.message}</p>
-          <div className="modal-actions">
-            <button
-              className="button secondary"
-              onClick={() => setConfirmation(null)}
-            >
-              Cancel
-            </button>
-            <button
-              className="button danger"
-              onClick={() => {
-                confirmation.action();
-                setConfirmation(null);
-              }}
-            >
-              Confirm
-            </button>
-          </div>
-        </Modal>
-      )}
-    </div>
+    </SaveStatus.Provider>
   );
 }
 function TransactionForm({
@@ -1128,6 +1234,7 @@ function CategoryForm({
             return;
           }
           onSave({
+            icon: category?.icon,
             id: category?.id || crypto.randomUUID(),
             name: name.trim(),
             type,

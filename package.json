@@ -8,10 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node tests/finance.cjs",
+    "test": "node tests/finance.cjs && node tests/cloud.cjs",
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.42.0",
     "react": "^19.2.8",

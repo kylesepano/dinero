@@ -35,6 +35,10 @@ export function validateData(v: unknown): v is AppData {
       !c.name.trim() ||
       c.name.length > 50 ||
       !["income", "expense"].includes(String(c.type)) ||
+      (c.icon !== undefined &&
+        (!Number.isInteger(c.icon) ||
+          Number(c.icon) < 0 ||
+          Number(c.icon) > 5)) ||
       typeof c.color !== "string" ||
       !/^#[0-9a-f]{6}$/i.test(c.color)
     )
