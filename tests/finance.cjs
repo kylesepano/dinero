@@ -41,3 +41,21 @@ store.set(STORAGE_KEY, '{invalid')
 assert.ok(loadData().error)
 assert.equal(store.get(STORAGE_KEY), '{invalid')
 console.log('Passed: money parsing, date validation, totals, edit/delete calculations, backup integrity, persistence, empty workspace, and malformed-storage recovery.')
+
+const { dailyTotals } = load('src/utils/finance.ts')
+const dailyFixture = [
+ { id:'1',type:'income',amount:10010,categoryId:'salary',date:'2024-02-29',note:'' },
+ { id:'2',type:'expense',amount:25,categoryId:'food',date:'2024-02-29',note:'' },
+ { id:'3',type:'expense',amount:75,categoryId:'food',date:'2024-02-29',note:'' },
+ { id:'4',type:'income',amount:999,categoryId:'salary',date:'2024-03-01',note:'' },
+]
+const daily = dailyTotals(dailyFixture,'2024-02')
+assert.equal(daily.length,29)
+assert.deepEqual(daily[28],{date:'2024-02-29',income:10010,expense:100})
+assert.deepEqual(daily[0],{date:'2024-02-01',income:0,expense:0})
+assert.equal(dailyTotals([], '2025-02').length,28)
+assert.equal(dailyTotals([], '2026-04').length,30)
+assert.equal(dailyTotals([], '2026-01').length,31)
+assert.equal(dailyTotals([], '1900-02').length,28)
+assert.equal(dailyTotals([], '2000-02').length,29)
+console.log('Passed: daily income/expense aggregation, zero days, month filtering, and leap-year boundaries.')

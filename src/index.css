@@ -1667,3 +1667,141 @@ fieldset:disabled {
   outline-offset: 4px;
   border-radius: 3px;
 }
+.daily-cash-flow {
+  margin-bottom: 23px;
+}
+.daily-legend,
+.daily-legend > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.daily-legend {
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  color: #456052;
+}
+.daily-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.daily-income {
+  background: #26876b;
+}
+.daily-expense {
+  background: #d18b75;
+}
+.daily-chart-hint {
+  padding: 16px 24px 0;
+  font-size: var(--text-sm);
+}
+.daily-chart-scroll {
+  overflow-x: auto;
+  padding: 24px;
+}
+.daily-chart-layout {
+  display: flex;
+  min-width: 840px;
+  gap: 12px;
+}
+.daily-axis {
+  width: 90px;
+  flex-shrink: 0;
+  height: 210px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: right;
+  font-size: var(--text-sm);
+  color: #7a8781;
+}
+.daily-bars {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  background:
+    linear-gradient(#e2e8e3, #e2e8e3) 0 0 / 100% 1px no-repeat,
+    linear-gradient(#e2e8e3, #e2e8e3) 0 100px / 100% 1px no-repeat,
+    linear-gradient(#e2e8e3, #e2e8e3) 0 200px / 100% 1px no-repeat;
+}
+.daily-day {
+  min-width: 0;
+  background: transparent;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  color: #456052;
+}
+.daily-day:hover,
+.daily-day.selected {
+  background-color: #26876b0d;
+}
+.daily-day:focus-visible {
+  outline-offset: 1px;
+}
+.daily-bar-pair {
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+}
+.daily-bar-pair > span {
+  display: block;
+  width: 42%;
+  max-width: 14px;
+  border-radius: 3px 3px 0 0;
+}
+.daily-day-label {
+  display: block;
+  padding-top: 10px;
+  font-size: var(--text-sm);
+}
+.daily-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8e3;
+}
+.daily-day-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+}
+.daily-day-controls button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.daily-day-controls button:disabled {
+  opacity: 0.4;
+}
+.daily-detail-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: var(--text-sm);
+  color: #7a8781;
+}
+.daily-detail-values strong {
+  display: block;
+  color: #263b35;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .daily-chart-scroll {
+    padding: 20px 18px;
+  }
+  .daily-chart-hint {
+    padding-inline: 18px;
+  }
+  .daily-detail {
+    padding: 16px 18px;
+  }
+}

@@ -28,6 +28,24 @@ export function totals(transactions: Transaction[]) {
     .reduce((s, t) => s + t.amount, 0);
   return { income, expense, balance: income - expense };
 }
+export function dailyTotals(transactions: Transaction[], month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const length = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][
+    monthNumber - 1
+  ];
+  const days = Array.from({ length }, (_, index) => ({
+    date: `${month}-${String(index + 1).padStart(2, "0")}`,
+    income: 0,
+    expense: 0,
+  }));
+  for (const transaction of transactions) {
+    if (!transaction.date.startsWith(`${month}-`)) continue;
+    const day = days[Number(transaction.date.slice(8, 10)) - 1];
+    if (day) day[transaction.type] += transaction.amount;
+  }
+  return days;
+}
 export const money = (amount: number, currency: string) =>
   new Intl.NumberFormat("en-PH", {
     style: "currency",

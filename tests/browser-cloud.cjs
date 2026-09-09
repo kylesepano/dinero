@@ -290,6 +290,20 @@ const errors = [];
     .filter({ hasText: "Backup restored and verified in your cloud account." })
     .waitFor();
   assert.equal(stores.a.data.transactions[0].note, "Restored JSON expense");
+  await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  const selectedMonth = await page.getByLabel('Select month').inputValue();
+  const transactionDay = Number(stores.a.data.transactions[0].date.slice(8)) - 1;
+  await page.locator('.daily-day').nth(transactionDay).click();
+  assert.equal(await page.locator('.daily-day').nth(transactionDay).getAttribute('aria-pressed'), 'true');
+  assert.match(await page.locator('.daily-detail-values').textContent(), /300\.75/);
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('.daily-day').nth(Math.min(transactionDay + 1, (await page.locator('.daily-day').count()) - 1)).getAttribute('aria-pressed'), 'true');
+  await page.keyboard.press('Home');
+  assert.equal(await page.locator('.daily-day').first().getAttribute('aria-pressed'), 'true');
+  await page.getByLabel('Select month').fill('2024-02');
+  await page.getByRole('heading', { name: 'No activity this month' }).waitFor();
+  await page.getByLabel('Select month').fill(selectedMonth);
+  await page.locator('.daily-bars').waitFor();
   for (const width of [1440, 1024, 390, 320]) {
     await page.setViewportSize({ width, height: 950 });
     await page.getByRole("button", { name: "Dashboard", exact: true }).click();

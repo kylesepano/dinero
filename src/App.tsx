@@ -42,6 +42,7 @@ import {
 import { validateData } from "./utils/storage";
 import Modal from "./components/Modal";
 import AccountMenu from "./components/AccountMenu";
+import DailyCashFlow from "./components/DailyCashFlow";
 import { SaveStatus } from "./components/SaveStatus";
 import LocalMigration from "./components/LocalMigration";
 import { fingerprint, prepareImport } from "./services/mapping";
@@ -691,6 +692,12 @@ export default function App({
                     </button>
                   </section>
                 </div>
+                <DailyCashFlow
+                  key={month}
+                  transactions={monthly}
+                  month={month}
+                  currency={data.settings.currency}
+                />
                 <section className="card recent">
                   <div className="card-heading">
                     <div>
