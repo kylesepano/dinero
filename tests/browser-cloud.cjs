@@ -291,20 +291,43 @@ const errors = [];
     .waitFor();
   assert.equal(stores.a.data.transactions[0].note, "Restored JSON expense");
   await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
-  const selectedMonth = await page.getByLabel('Select month').inputValue();
-  const transactionDay = Number(stores.a.data.transactions[0].date.slice(8)) - 1;
-  await page.locator('.daily-day').nth(transactionDay).click();
-  assert.equal(await page.locator('.daily-day').nth(transactionDay).getAttribute('aria-pressed'), 'true');
-  assert.match(await page.locator('.daily-detail-values').textContent(), /300\.75/);
-  await page.keyboard.press('ArrowRight');
-  assert.equal(await page.locator('.daily-day').nth(Math.min(transactionDay + 1, (await page.locator('.daily-day').count()) - 1)).getAttribute('aria-pressed'), 'true');
-  await page.keyboard.press('Home');
-  assert.equal(await page.locator('.daily-day').first().getAttribute('aria-pressed'), 'true');
-  await page.getByLabel('Select month').fill('2024-02');
-  await page.getByRole('heading', { name: 'No activity this month' }).waitFor();
-  await page.getByLabel('Select month').fill(selectedMonth);
-  await page.locator('.daily-bars').waitFor();
-  for (const width of [1440, 1024, 390, 320]) {
+  const beforeFilters=JSON.stringify(stores.a);
+  const transactionDay=Number(stores.a.data.transactions[0].date.slice(8))-1;
+  await page.getByLabel('Income vs expenses interval').selectOption(String(transactionDay));
+  assert.match(await page.locator('.analytics-chart').filter({has:page.getByRole('heading',{name:'Income vs expenses',exact:true})}).locator('.chart-exact').textContent(),/300\.75/);
+  await page.getByLabel('Analytics period').selectOption('custom');
+  await page.getByLabel('Start date',{exact:true}).fill('2024-02-01');
+  await page.getByLabel('End date',{exact:true}).fill('2024-02-29');
+  await page.getByRole('button',{name:'Apply range',exact:true}).click();
+  await page.getByRole('heading',{name:'No activity during this period.',exact:true}).waitFor();
+  await page.getByLabel('Analytics period').selectOption('thisMonth');
+  await page.getByLabel('Group chart data by').selectOption('week');
+  await page.getByLabel('Group chart data by').selectOption('month');
+  await page.getByLabel('Group chart data by').selectOption('day');
+  const trend=page.locator('.analytics-chart').filter({has:page.getByRole('heading',{name:'Income vs expenses',exact:true})});
+  await trend.getByRole('button',{name:'Line',exact:true}).click();
+  await trend.getByRole('button',{name:'Bar',exact:true}).click();
+  const categoryChart=page.locator('.analytics-chart').filter({has:page.getByRole('heading',{name:'Spending by category',exact:true})});
+  const categoryAmounts=await categoryChart.locator('.analytics-category-list').allTextContents();
+  await categoryChart.getByRole('button',{name:'Bar',exact:true}).click();
+  await categoryChart.getByRole('button',{name:'Donut',exact:true}).click();
+  assert.deepEqual(await categoryChart.locator('.analytics-category-list').allTextContents(),categoryAmounts);
+  await categoryChart.getByRole('button',{name:'View Food & dining transactions',exact:true}).click();
+  assert.equal(await page.getByLabel('Filter by type').inputValue(),'expense');
+  assert.equal(await page.getByLabel('Filter by category').inputValue(),stores.a.data.categories.find(c=>c.name==='Food & dining').id);
+  await page.getByLabel('Minimum amount').fill('400');
+  await page.getByRole('heading',{name:'No transactions here yet'}).waitFor();
+  await page.getByLabel('Maximum amount').fill('200');
+  await page.getByRole('alert').filter({hasText:'Minimum amount cannot exceed'}).waitFor();
+  await page.getByRole('button',{name:'Clear filters',exact:true}).click();
+  await page.getByLabel('Minimum amount').fill('300.75');
+  await page.getByLabel('Maximum amount').fill('300.75');
+  await page.getByLabel('Search transactions').fill('Restored JSON');
+  for(const sort of ['highest','lowest','oldest','newest'])await page.getByLabel('Sort transactions').selectOption(sort);
+  await page.getByText('Restored JSON expense',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Clear filters',exact:true}).click();
+  assert.equal(JSON.stringify(stores.a),beforeFilters,'Filtering and chart switches must not write cloud data');
+  for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 950 });
     await page.getByRole("button", { name: "Dashboard", exact: true }).click();
     const trigger = page.getByRole("button", { name: "Open account menu" });
@@ -412,7 +435,7 @@ const errors = [];
       );
     }
   }
-  for (const width of [1440, 390]) {
+  for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 950 });
     for (const name of [
       "Dashboard",

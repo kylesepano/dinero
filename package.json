@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node tests/finance.cjs && node tests/cloud.cjs",
+    "test": "node tests/finance.cjs && node tests/cloud.cjs && node tests/analytics.cjs",
     "typecheck": "tsc -b"
   },
   "dependencies": {

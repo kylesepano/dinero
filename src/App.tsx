@@ -1,4 +1,4 @@
-﻿import { useState, type FormEvent } from "react";
+﻿import { useMemo, useState, type FormEvent } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -42,7 +42,18 @@ import {
 import { validateData } from "./utils/storage";
 import Modal from "./components/Modal";
 import AccountMenu from "./components/AccountMenu";
-import DailyCashFlow from "./components/DailyCashFlow";
+import DashboardAnalytics from "./components/DashboardAnalytics";
+import DateRangeFilter from "./components/DateRangeFilter";
+import {
+  defaultGrouping,
+  filterTransactions,
+  filterTransactionsByDateRange,
+  parseFilterAmount,
+  presetRange,
+  type AnalyticsRange,
+  type DateRange,
+  type Grouping,
+} from "./utils/analytics";
 import { SaveStatus } from "./components/SaveStatus";
 import LocalMigration from "./components/LocalMigration";
 import { fingerprint, prepareImport } from "./services/mapping";
@@ -93,6 +104,40 @@ export default function App({
   const [type, setType] = useState("all");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState("newest");
+  const [range, setRange] = useState<AnalyticsRange>(() =>
+    presetRange("thisMonth"),
+  );
+  const [grouping, setGrouping] = useState<Grouping>("day");
+  const [minimum, setMinimum] = useState("");
+  const [maximum, setMaximum] = useState("");
+  function changeRange(next: AnalyticsRange) {
+    setRange(next);
+    setGrouping(defaultGrouping(next));
+  }
+  function clearFilters() {
+    changeRange(presetRange("thisMonth"));
+    setSearch("");
+    setType("all");
+    setCategory("all");
+    setMinimum("");
+    setMaximum("");
+    setSort("newest");
+  }
+  function inspectRange(
+    next: DateRange,
+    categoryId = "all",
+    transactionType = "all",
+  ) {
+    changeRange({ ...next, preset: "custom" });
+    setCategory(categoryId);
+    setType(transactionType);
+    setSearch("");
+    setMinimum("");
+    setMaximum("");
+    setSort("newest");
+    setPage("Transactions");
+    requestAnimationFrame(() => document.getElementById("page-title")?.focus());
+  }
   const [transaction, setTransaction] = useState<
     Transaction | null | undefined
   >(undefined);
@@ -111,28 +156,46 @@ export default function App({
   const summary = totals(monthly);
   const budget = data.budgets.find((b) => b.month === month)?.amount || 0;
   const percent = budget ? Math.round((summary.expense / budget) * 100) : 0;
-  const spending = data.categories
-    .filter((c) => c.type === "expense")
-    .map((c) => ({
-      ...c,
-      total: monthly
-        .filter((t) => t.categoryId === c.id)
-        .reduce((a, t) => a + t.amount, 0),
-    }))
-    .filter((c) => c.total > 0)
-    .sort((a, b) => b.total - a.total);
-  const sorted = [...monthly].sort((a, b) =>
-    sort === "newest"
-      ? b.date.localeCompare(a.date)
-      : a.date.localeCompare(b.date),
+  const min = parseFilterAmount(minimum);
+  const max = parseFilterAmount(maximum);
+  const filterError =
+    Number.isNaN(min) || Number.isNaN(max)
+      ? "Enter valid amounts with at most two decimal places."
+      : min !== null && max !== null && min > max
+        ? "Minimum amount cannot exceed maximum amount."
+        : "";
+  const filtered = useMemo(
+    () =>
+      filterError
+        ? []
+        : filterTransactions(data.transactions, data.categories, {
+            ...range,
+            type,
+            categoryId: category,
+            min,
+            max,
+            search,
+            sort,
+          }),
+    [
+      data.transactions,
+      data.categories,
+      range,
+      type,
+      category,
+      min,
+      max,
+      search,
+      sort,
+      filterError,
+    ],
   );
-  const filtered = sorted.filter(
-    (t) =>
-      (type === "all" || t.type === type) &&
-      (category === "all" || t.categoryId === category) &&
-      `${t.note} ${data.categories.find((c) => c.id === t.categoryId)?.name}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+  const recent = useMemo(
+    () =>
+      filterTransactionsByDateRange(data.transactions, range).sort((a, b) =>
+        b.date.localeCompare(a.date),
+      ),
+    [data.transactions, range],
   );
   const startFresh = () =>
     setConfirmation({
@@ -327,15 +390,6 @@ export default function App({
       </>
     );
   }
-  const gradient = spending
-    .map((c, i) => {
-      const start =
-        (spending.slice(0, i).reduce((sum, item) => sum + item.total, 0) /
-          summary.expense) *
-        100;
-      return `${c.color} ${start}% ${start + (c.total / summary.expense) * 100}%`;
-    })
-    .join(",");
   if (loading || !ready)
     return (
       <div className="auth-shell">
@@ -387,6 +441,7 @@ export default function App({
               <button
                 key={name}
                 className={`nav-item ${page === name ? "active" : ""}`}
+                aria-label={name}
                 onClick={() => {
                   setPage(name);
                   setNotice("");
@@ -491,7 +546,8 @@ export default function App({
                   className="button primary"
                   onClick={() => setTransaction(null)}
                 >
-                  <Plus size={18} /> Add transaction
+                  <Plus size={18} />
+                  Add transaction
                 </button>
               )}
               {page === "Categories" && (
@@ -505,7 +561,7 @@ export default function App({
               )}
             </div>
             {error && (
-              <div role="alert" className="notice warning">
+              <div className="notice warning" role="alert">
                 {error}
               </div>
             )}
@@ -530,7 +586,7 @@ export default function App({
               </div>
             )}
             {notice && (
-              <div role="status" className="notice">
+              <div className="notice" role="status">
                 {notice}
                 <button
                   onClick={() => setNotice("")}
@@ -552,16 +608,17 @@ export default function App({
                 </button>
               </div>
             )}
-            {(page === "Dashboard" ||
-              page === "Transactions" ||
-              page === "Budget") && (
+            {(page === "Dashboard" || page === "Transactions") && (
+              <DateRangeFilter
+                key={range.start + range.end + range.preset}
+                range={range}
+                onChange={changeRange}
+              />
+            )}
+            {page === "Budget" && (
               <div className="period-row">
                 <h2>
-                  {page === "Dashboard"
-                    ? "Monthly overview"
-                    : page === "Budget"
-                      ? "Your monthly plan"
-                      : "All transactions"}{" "}
+                  Your monthly plan{" "}
                   <span className="subtle-pill">{monthLabel(month)}</span>
                 </h2>
                 <label className="month-picker">
@@ -578,149 +635,34 @@ export default function App({
               </div>
             )}
             {page === "Dashboard" && (
-              <>
-                <div className="stats-grid">
-                  {[
-                    {
-                      name: "Total income",
-                      value: summary.income,
-                      icon: ArrowDownLeft,
-                      subtitle: "All money coming in",
-                      className: "income",
-                    },
-                    {
-                      name: "Total expenses",
-                      value: summary.expense,
-                      icon: ArrowUpRight,
-                      subtitle: "All money going out",
-                      className: "expense",
-                    },
-                    {
-                      name: "Current balance",
-                      value: summary.balance,
-                      icon: Wallet,
-                      subtitle: "Income minus expenses this month",
-                      className: "balance",
-                    },
-                    {
-                      name: "Budget remaining",
-                      value: budget - summary.expense,
-                      icon: ChartNoAxesCombined,
-                      subtitle: budget
-                        ? `Of ${fmt(budget)} monthly budget`
-                        : "No monthly budget set",
-                      className: "budget",
-                    },
-                  ].map(({ name, value, icon: Icon, subtitle, className }) => (
-                    <section key={name} className={`stat-card ${className}`}>
-                      <div className="stat-top">
-                        <span>{name}</span>
-                        <span className="stat-icon">
-                          <Icon size={19} />
-                        </span>
-                      </div>
-                      <strong className="stat-value">{fmt(value)}</strong>
-                      <small>{subtitle}</small>
-                    </section>
-                  ))}
-                </div>
-                <div className="dashboard-middle">
-                  <section className="card spending-card">
+              <DashboardAnalytics
+                data={data}
+                range={range}
+                grouping={grouping}
+                onGrouping={setGrouping}
+                onInspect={inspectRange}
+                onBudget={(m) => {
+                  setMonth(m);
+                  setPage("Budget");
+                }}
+                recent={
+                  <section className="card recent">
                     <div className="card-heading">
                       <div>
-                        <h2>Where your money goes</h2>
-                        <p>Spending by category</p>
+                        <h2>Recent transactions</h2>
+                        <p>Your latest money moves in this period.</p>
                       </div>
-                      <span className="badge">This month</span>
+                      <button
+                        className="text-link"
+                        onClick={() => inspectRange(range)}
+                      >
+                        View all transactions <ArrowRight size={16} />
+                      </button>
                     </div>
-                    {spending.length ? (
-                      <div className="spending-content">
-                        <div
-                          className="donut"
-                          style={{ background: `conic-gradient(${gradient})` }}
-                          role="img"
-                          aria-label={`Spending by category: ${spending.map((c) => `${c.name} ${fmt(c.total)}`).join(", ")}`}
-                        >
-                          <div>
-                            <span>Total spent</span>
-                            <strong>{fmt(summary.expense)}</strong>
-                            <small>{spending.length} categories</small>
-                          </div>
-                        </div>
-                        <div className="legend">
-                          {spending.map((c) => (
-                            <div key={c.id}>
-                              <span className="legend-label">
-                                <i style={{ background: c.color }} />
-                                {c.name}
-                              </span>
-                              <strong>{fmt(c.total)}</strong>
-                              <span className="muted">
-                                {Math.round((c.total / summary.expense) * 100)}%
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="empty">
-                        <ChartNoAxesCombined size={30} />
-                        <h3>A fresh start</h3>
-                        <p>
-                          Your spending breakdown will appear after your first
-                          expense.
-                        </p>
-                      </div>
-                    )}
+                    {transactionTable(recent, 5)}
                   </section>
-                  <section className="card budget-card">
-                    <div className="card-heading">
-                      <div>
-                        <h2>Monthly budget</h2>
-                        <p>A little planning goes a long way.</p>
-                      </div>
-                      <span className="soft-icon">
-                        <ChartNoAxesCombined size={20} />
-                      </span>
-                    </div>
-                    {budgetContent()}
-                    <button
-                      className="text-link"
-                      onClick={() => setPage("Budget")}
-                    >
-                      Manage budget <ArrowRight size={16} />
-                    </button>
-                  </section>
-                </div>
-                <DailyCashFlow
-                  key={month}
-                  transactions={monthly}
-                  month={month}
-                  currency={data.settings.currency}
-                />
-                <section className="card recent">
-                  <div className="card-heading">
-                    <div>
-                      <h2>Recent transactions</h2>
-                      <p>Your latest money moves.</p>
-                    </div>
-                    <button
-                      className="text-link"
-                      onClick={() => setPage("Transactions")}
-                    >
-                      View all transactions <ArrowRight size={16} />
-                    </button>
-                  </div>
-                  {transactionTable(
-                    [...monthly].sort((a, b) => b.date.localeCompare(a.date)),
-                    5,
-                  )}
-                </section>
-                <div className="footer-note">
-                  <ShieldCheck size={14} /> A little awareness today. A
-                  healthier financial tomorrow.
-                </div>
-              </>
+                }
+              />
             )}
             {page === "Transactions" && (
               <section className="card">
@@ -756,18 +698,51 @@ export default function App({
                     ))}
                   </select>
                   <select
-                    aria-label="Sort by date"
+                    aria-label="Sort transactions"
                     value={sort}
                     onChange={(e) => setSort(e.target.value)}
                   >
                     <option value="newest">Newest first</option>
                     <option value="oldest">Oldest first</option>
+                    <option value="highest">Highest amount</option>
+                    <option value="lowest">Lowest amount</option>
                   </select>
                 </div>
+                <div className="amount-filters">
+                  <label>
+                    Minimum amount ({data.settings.currency})
+                    <input
+                      aria-label="Minimum amount"
+                      inputMode="decimal"
+                      value={minimum}
+                      onChange={(e) => setMinimum(e.target.value)}
+                      placeholder="No minimum"
+                    />
+                  </label>
+                  <label>
+                    Maximum amount ({data.settings.currency})
+                    <input
+                      aria-label="Maximum amount"
+                      inputMode="decimal"
+                      value={maximum}
+                      onChange={(e) => setMaximum(e.target.value)}
+                      placeholder="No maximum"
+                    />
+                  </label>
+                  <button className="button secondary" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                </div>
+                {filterError && (
+                  <p role="alert" className="form-error filter-error">
+                    {filterError}
+                  </p>
+                )}
                 {transactionTable(filtered)}
                 <div className="table-footer">
                   {filtered.length} transaction
-                  {filtered.length === 1 ? "" : "s"} · {monthLabel(month)}
+                  {filtered.length === 1 ? "" : "s"} · {dateLabel(range.start)}{" "}
+                  – {dateLabel(range.end)}
                 </div>
               </section>
             )}

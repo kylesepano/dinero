@@ -108,3 +108,24 @@ Cloud access requires a connection; this is not offline-first or realtime collab
 Changed areas: `src/auth/`, `src/lib/supabase.ts`, `src/services/`, `src/hooks/useData.ts`, `src/components/LocalMigration.tsx`, `src/components/SaveStatus.ts`, `src/components/Modal.tsx`, `src/App.tsx`, `src/main.tsx`, `src/types/index.ts`, `src/utils/storage.ts`, and auth styles in `src/index.css`. SQL is in `supabase/migrations/`; tests are in `tests/` and `supabase/tests/`. Environment/package files and this README complete setup.
 
 Official references: [password authentication](https://supabase.com/docs/guides/auth/passwords), [redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [database functions](https://supabase.com/docs/guides/database/functions).
+
+## Phase 5: Analytics and filtering
+
+The dashboard and Transactions share ten date presets, including an applied custom range. Transactions combine date, type, category, search, inclusive minimum/maximum amounts, and date/amount sorting. Clear filters restores this month and the default sort. Filters and chart selections are transient UI state and never save financial data.
+
+Dashboard additions:
+
+- Income versus expenses with bar/line views and daily, weekly, or monthly grouping.
+- Expense categories with donut/bar views, amounts, percentages, and category drilldowns.
+- Spending over time, highest spending day, lowest active spending day, and daily average.
+- Income sources, top five expense categories, and deterministic financial insights.
+- Optional previous-period comparisons for income, expenses, and net balance, showing absolute and percentage changes.
+- Keyboard-accessible chart interval selection and links to matching transactions.
+
+Date boundaries are inclusive and weeks start Monday. Current week/month/year stop today; daily averages include elapsed zero-spending days. This month compares with the same elapsed dates last month, this year with the same elapsed dates last year, and this week with the same weekdays last week. Shorter prior months clamp to their last day. Last month compares full calendar months; rolling/custom periods compare the immediately preceding equal number of days. Percentage change uses the absolute prior amount; a zero prior baseline shows no percentage instead of infinity. Monthly budget usage is explicitly separate and covers the whole selected month through today.
+
+Implementation: `src/utils/analytics.ts` owns pure calculations; `DateRangeFilter.tsx`, `DashboardAnalytics.tsx`, `TimeSeriesChart.tsx`, and `CategoryBreakdown.tsx` in `src/components/` render the shared controls and responsive charts. `src/App.tsx` connects dashboard drilldowns and transaction filters; `src/index.css` reuses the existing visual system. No chart dependency, database migration, authentication change, or persistence change was added.
+
+Validation: `npm test` includes `tests/analytics.cjs` for exact totals, date/leap/year boundaries, comparisons, zero baselines, grouping, categories, combined filters, sorting, PHP formatting, empty/income-only data, and nonmutation. The mocked browser suite also checks chart switches/drilldowns, filters without cloud writes, existing auth/CRUD flows, all five pages and both forms at 320, 390, 768, 1024, and 1440px. TypeScript, lint, tests, production build, and these browser checks passed. Live Supabase was not exercised for this phase.
+
+Limits: custom analytics ranges end no later than today and cover at most 3,660 days. Analytics calculate from the currently loaded account snapshot; reload to include changes from another device. Monetary totals remain integer minor units; displayed averages round to the nearest minor unit. Charts use native SVG/CSS with exact values available through interval controls and category rows.
