@@ -1,8 +1,13 @@
-export type TransactionType = "income" | "expense";
+export type TransactionType =
+  | "income"
+  | "expense"
+  | "debt_borrowed"
+  | "debt_lent";
+export type CategoryType = "income" | "expense";
 export interface Category {
   id: string;
   name: string;
-  type: TransactionType;
+  type: CategoryType;
   color: string;
   icon?: number;
 }
@@ -10,8 +15,10 @@ export interface Transaction {
   id: string;
   type: TransactionType;
   amount: number;
-  categoryId: string;
+  categoryId?: string;
   date: string;
+  /** Local time selected when the transaction was recorded (HH:mm). */
+  time?: string;
   note: string;
 }
 export interface Budget {

@@ -187,7 +187,7 @@ export function calculateCategoryBreakdown(
   for (const t of transactions)
     if (t.type === type) {
       total += t.amount;
-      values.set(t.categoryId, (values.get(t.categoryId) || 0) + t.amount);
+      values.set(t.categoryId!, (values.get(t.categoryId!) || 0) + t.amount);
     }
   return categories
     .filter((c) => values.has(c.id))
@@ -233,8 +233,10 @@ export function groupTransactions(
   for (const t of transactions)
     if (t.date >= range.start && t.date <= range.end) {
       const bucket = buckets.get(keyFor(t.date))!;
-      bucket[t.type] += t.amount;
-      bucket.count++;
+      if (t.type === "income" || t.type === "expense") {
+        bucket[t.type] += t.amount;
+        bucket.count++;
+      }
     }
   return [...buckets.values()];
 }
@@ -323,19 +325,19 @@ export function filterTransactions(
         (filter.categoryId === "all" || t.categoryId === filter.categoryId) &&
         (filter.min === null || t.amount >= filter.min) &&
         (filter.max === null || t.amount <= filter.max) &&
-        `${t.note} ${names.get(t.categoryId) || ""}`
+        `${t.note} ${names.get(t.categoryId || "") || (t.type === "debt_borrowed" ? "Borrowed debt" : t.type === "debt_lent" ? "Lent debt" : "")}`
           .toLowerCase()
           .includes(query),
     )
     .sort((a, b) => {
       const order =
         filter.sort === "oldest"
-          ? a.date.localeCompare(b.date)
+          ? `${a.date}${a.time || ""}`.localeCompare(`${b.date}${b.time || ""}`)
           : filter.sort === "highest"
             ? b.amount - a.amount
             : filter.sort === "lowest"
               ? a.amount - b.amount
-              : b.date.localeCompare(a.date);
+              : `${b.date}${b.time || ""}`.localeCompare(`${a.date}${a.time || ""}`);
       return order || a.id.localeCompare(b.id);
     });
 }

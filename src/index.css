@@ -712,6 +712,13 @@ tr:last-child td {
   white-space: nowrap;
   font-size: var(--text-sm);
 }
+.debt-form-note {
+  align-self: end;
+  color: #657267;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  padding: 10px 0;
+}
 .footer-note {
   display: flex;
   align-items: center;
@@ -947,13 +954,14 @@ form label select {
 }
 .segmented {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   background: #f0f4ef;
   border-radius: 8px;
   padding: 4px;
 }
 .segmented button {
-  width: 50%;
+  width: calc(50% - 2px);
   padding: 10px;
   display: flex;
   align-items: center;

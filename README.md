@@ -5,7 +5,7 @@ Personal income and expense tracking with React, TypeScript, Tailwind, Vite, and
 ## Local setup
 
 1. Run `npm install`.
-2. Create a Supabase project and apply both migrations below.
+2. Create a Supabase project and apply all migrations below.
 3. Copy `.env.example` to `.env.local` and fill in:
 
    ```dotenv
@@ -23,13 +23,14 @@ Run these files once, in order, in Supabase SQL Editor:
 
 1. `supabase/migrations/202609080001_workspace.sql`
 2. `supabase/migrations/202609080002_atomic_workspace.sql`
+3. `supabase/migrations/202609180003_debts_and_times.sql`
 
 Alternatively link the Supabase CLI and run `supabase db push`. Do not mix manual/CLI migration application without reconciling migration history.
 
 | Table | Purpose |
 | --- | --- |
 | `categories` | UUID ID, owner, name/type/color, preserved optional icon |
-| `transactions` | UUID ID, owner, integer centavos, date-only date, category, note |
+| `transactions` | UUID ID, owner, integer centavos, date/time, optional category, note |
 | `budgets` | UUID ID, owner, unique month, integer spending limit |
 | `settings` | UUID ID, unique owner, currency, demo flag, revision |
 | `import_receipts` | UUID ID, owner, unique backup fingerprint, timestamp |
@@ -37,6 +38,12 @@ Alternatively link the Supabase CLI and run `supabase db push`. Do not mix manua
 Every table enables/forces RLS, revokes anonymous/public privileges, and has explicit owner-only SELECT/INSERT/UPDATE/DELETE policies. INSERT/UPDATE checks prevent assigning another owner. The composite transaction foreign key `(category_id, user_id, type)` prevents cross-account and wrong-type references. Used categories cannot be deleted or change type while referenced.
 
 `load_workspace` returns a consistent snapshot without REST row-pagination truncation. `save_workspace` changes data atomically, locks the settings row, and checks the expected revision to reject stale app saves. Both are **SECURITY INVOKER**, with empty search paths and fully qualified objects; the caller's RLS applies. No elevated function or separate backend is used.
+
+## Debts and transaction times
+
+Transactions can be recorded as **I borrowed** or **I lent**. Borrowing adds the amount to the wallet balance; lending subtracts it. Debt entries have no category and do not count as income, expenses, category totals, spending charts, or budgets. Each new transaction records the current local time by default, and transaction tables show the saved date and time. Older date-only records remain valid and continue to display their date until they are edited.
+
+Apply `202609180003_debts_and_times.sql` before using this release with an existing Supabase project. It extends the existing owner-scoped transaction table and snapshot RPCs without changing prior income, expense, category, or budget records.
 
 In-memory data changes only after a successful validated response. Failed saves keep forms open. Reload cloud data before retrying an uncertain save: a lost response may mean the server committed. Revision checks prevent duplicate submissions in that case. Requests verify and capture the initiating account's token, so account switching cannot retarget pending writes.
 

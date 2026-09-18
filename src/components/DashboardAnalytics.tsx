@@ -155,7 +155,7 @@ export default function DashboardAnalytics({
             previous: analysis.previous.balance,
             icon: Wallet,
             style: "balance",
-            subtitle: "Income minus expenses",
+            subtitle: "Income, expenses, and debt cash flow",
           },
           {
             name: "Average spending",

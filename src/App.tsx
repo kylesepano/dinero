@@ -28,14 +28,16 @@ import {
   Heart,
   Sparkles,
 } from "lucide-react";
-import type { Category, Transaction, TransactionType } from "./types";
+import type { Category, CategoryType, Transaction, TransactionType } from "./types";
 import { useData } from "./hooks/useData";
 import { freshData, colors } from "./data/defaults";
 import {
   dateLabel,
+  dateTimeLabel,
   money,
   monthLabel,
   parseAmount,
+  currentTime,
   today,
   totals,
 } from "./utils/finance";
@@ -289,41 +291,52 @@ export default function App({
           <tbody>
             {items.slice(0, limit).map((t) => {
               const c = data.categories.find((c) => c.id === t.categoryId);
+              const debt = t.type === "debt_borrowed" || t.type === "debt_lent";
+              const borrowed = t.type === "debt_borrowed";
+              const label = debt
+                ? borrowed
+                  ? "Money borrowed"
+                  : "Money lent"
+                : t.type === "income"
+                  ? "Money in"
+                  : "Money out";
               return (
                 <tr key={t.id}>
                   <td>
                     <div className="transaction-name">
                       <CategoryIcon category={c} />
                       <div>
-                        <strong>{t.note || c?.name}</strong>
+                        <strong>{t.note || c?.name || label}</strong>
                         <small>
-                          {t.type === "income" ? "Money in" : "Money out"}
+                          {label}
                         </small>
                       </div>
                     </div>
                   </td>
                   <td>
-                    <span className="badge">{c?.name}</span>
+                    <span className="badge">{c?.name || "Debt"}</span>
                   </td>
-                  <td className="muted date-cell">{dateLabel(t.date)}</td>
+                  <td className="muted date-cell">
+                    {dateTimeLabel(t.date, t.time)}
+                  </td>
                   <td
-                    className={`right amount ${t.type === "income" ? "positive" : ""}`}
+                    className={`right amount ${t.type === "income" || borrowed ? "positive" : ""}`}
                   >
-                    {t.type === "income" ? "+" : "−"}
+                    {t.type === "income" || borrowed ? "+" : "−"}
                     {fmt(t.amount)}
                   </td>
                   <td>
                     <div className="row-actions">
                       <button
                         className="icon-button"
-                        aria-label={`Edit ${t.note || c?.name}`}
+                        aria-label={`Edit ${t.note || c?.name || label}`}
                         onClick={() => setTransaction(t)}
                       >
                         <Pencil size={15} />
                       </button>
                       <button
                         className="icon-button"
-                        aria-label={`Delete ${t.note || c?.name}`}
+                        aria-label={`Delete ${t.note || c?.name || label}`}
                         onClick={() => removeTransaction(t)}
                       >
                         <Trash2 size={15} />
@@ -681,9 +694,11 @@ export default function App({
                     value={type}
                     onChange={(e) => setType(e.target.value)}
                   >
-                    <option value="all">All types</option>
-                    <option value="income">Income</option>
-                    <option value="expense">Expense</option>
+                      <option value="all">All types</option>
+                      <option value="income">Income</option>
+                      <option value="expense">Expense</option>
+                      <option value="debt_borrowed">Borrowed</option>
+                      <option value="debt_lent">Lent</option>
                   </select>
                   <select
                     aria-label="Filter by category"
@@ -1081,8 +1096,10 @@ function TransactionForm({
       "",
   );
   const [date, setDate] = useState(transaction?.date || today());
+  const [time, setTime] = useState(transaction?.time || currentTime());
   const [note, setNote] = useState(transaction?.note || "");
   const [error, setError] = useState("");
+  const financial = type === "income" || type === "expense";
   function submit(e: FormEvent) {
     e.preventDefault();
     const value = parseAmount(amount);
@@ -1092,7 +1109,7 @@ function TransactionForm({
       );
       return;
     }
-    if (!categories.some((c) => c.id === categoryId && c.type === type)) {
+    if (financial && !categories.some((c) => c.id === categoryId && c.type === type)) {
       setError("Choose a category. You can create one on the Categories page.");
       return;
     }
@@ -1100,8 +1117,9 @@ function TransactionForm({
       id: transaction?.id || crypto.randomUUID(),
       type,
       amount: value,
-      categoryId,
+      ...(financial ? { categoryId } : {}),
       date,
+      time,
       note: note.trim(),
     });
   }
@@ -1112,22 +1130,32 @@ function TransactionForm({
     >
       <form onSubmit={submit}>
         <div className="segmented">
-          {(["expense", "income"] as const).map((t) => (
+          {(["expense", "income", "debt_borrowed", "debt_lent"] as const).map((t) => (
             <button
               key={t}
               type="button"
               className={type === t ? "selected" : ""}
               onClick={() => {
                 setType(t);
-                setCategoryId(categories.find((c) => c.type === t)?.id || "");
+                setCategoryId(
+                  t === "income" || t === "expense"
+                    ? categories.find((c) => c.type === t)?.id || ""
+                    : "",
+                );
               }}
             >
-              {t === "expense" ? (
+              {t === "expense" || t === "debt_lent" ? (
                 <ArrowUpRight size={16} />
               ) : (
                 <ArrowDownLeft size={16} />
               )}{" "}
-              {t === "expense" ? "Expense" : "Income"}
+              {t === "expense"
+                ? "Expense"
+                : t === "income"
+                  ? "Income"
+                  : t === "debt_borrowed"
+                    ? "I borrowed"
+                    : "I lent"}
             </button>
           ))}
         </div>
@@ -1143,25 +1171,33 @@ function TransactionForm({
           />
         </label>
         <div className="form-grid">
-          <label>
-            Category
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              required
-            >
-              <option value="" disabled>
-                Select category
-              </option>
-              {categories
-                .filter((c) => c.type === type)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </label>
+          {financial ? (
+            <label>
+              Category
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Select category
+                </option>
+                {categories
+                  .filter((c) => c.type === (type as CategoryType))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : (
+            <div className="debt-form-note">
+              {type === "debt_borrowed"
+                ? "Adds this borrowed amount to your wallet without counting it as income."
+                : "Subtracts this amount from your wallet without counting it as an expense."}
+            </div>
+          )}
           <label>
             Date
             <input
@@ -1173,9 +1209,18 @@ function TransactionForm({
               max="9999-12-31"
             />
           </label>
+          <label>
+            Time
+            <input
+              type="time"
+              required
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+          </label>
         </div>
         <label>
-          Note <span className="muted">(optional)</span>
+          {financial ? "Note" : "Person / note"} <span className="muted">(optional)</span>
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -1214,7 +1259,7 @@ function CategoryForm({
   onSave: (c: Category) => void;
 }) {
   const [name, setName] = useState(category?.name || "");
-  const [type, setType] = useState<TransactionType>(
+  const [type, setType] = useState<CategoryType>(
     category?.type || "expense",
   );
   const [color, setColor] = useState(category?.color || colors[0]);
@@ -1267,7 +1312,7 @@ function CategoryForm({
           <select
             disabled={used}
             value={type}
-            onChange={(e) => setType(e.target.value as TransactionType)}
+            onChange={(e) => setType(e.target.value as CategoryType)}
           >
             <option value="expense">Expense</option>
             <option value="income">Income</option>

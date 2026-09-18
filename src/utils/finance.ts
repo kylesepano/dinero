@@ -3,6 +3,13 @@ export function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+export function currentTime() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+export function validTime(value: unknown): value is string {
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
 export function validDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     return false;
@@ -26,7 +33,13 @@ export function totals(transactions: Transaction[]) {
   const expense = transactions
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0);
-  return { income, expense, balance: income - expense };
+  const borrowed = transactions
+    .filter((t) => t.type === "debt_borrowed")
+    .reduce((s, t) => s + t.amount, 0);
+  const lent = transactions
+    .filter((t) => t.type === "debt_lent")
+    .reduce((s, t) => s + t.amount, 0);
+  return { income, expense, balance: income - expense + borrowed - lent };
 }
 export function dailyTotals(transactions: Transaction[], month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
@@ -42,7 +55,8 @@ export function dailyTotals(transactions: Transaction[], month: string) {
   for (const transaction of transactions) {
     if (!transaction.date.startsWith(`${month}-`)) continue;
     const day = days[Number(transaction.date.slice(8, 10)) - 1];
-    if (day) day[transaction.type] += transaction.amount;
+    if (day && (transaction.type === "income" || transaction.type === "expense"))
+      day[transaction.type] += transaction.amount;
   }
   return days;
 }
@@ -63,3 +77,10 @@ export const dateLabel = (date: string) =>
     day: "numeric",
     year: "numeric",
   });
+export const timeLabel = (time: string) =>
+  new Date(`1970-01-01T${time}:00`).toLocaleTimeString("en", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+export const dateTimeLabel = (date: string, time?: string) =>
+  time && validTime(time) ? `${dateLabel(date)} · ${timeLabel(time)}` : dateLabel(date);

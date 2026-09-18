@@ -1,6 +1,6 @@
 import type { AppData } from "../types";
 import { freshData } from "../data/defaults";
-import { validDate } from "./finance";
+import { validDate, validTime } from "./finance";
 export const STORAGE_KEY = "dinero:v1";
 const record = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
@@ -51,6 +51,8 @@ export function validateData(v: unknown): v is AppData {
   const tids = new Set();
   let total = 0;
   for (const t of v.transactions) {
+    const financial = t.type === "income" || t.type === "expense";
+    const debt = t.type === "debt_borrowed" || t.type === "debt_lent";
     if (
       !record(t) ||
       typeof t.id !== "string" ||
@@ -58,9 +60,13 @@ export function validateData(v: unknown): v is AppData {
       tids.has(t.id) ||
       !amount(t.amount) ||
       !validDate(t.date) ||
+      (t.time !== undefined && !validTime(t.time)) ||
       typeof t.note !== "string" ||
       t.note.length > 250 ||
-      !v.categories.some((c) => c.id === t.categoryId && c.type === t.type)
+      !financial && !debt ||
+      (financial &&
+        !v.categories.some((c) => c.id === t.categoryId && c.type === t.type)) ||
+      (debt && t.categoryId !== undefined)
     )
       return false;
     total += Number(t.amount);
