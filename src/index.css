@@ -719,6 +719,28 @@ tr:last-child td {
   line-height: 1.5;
   padding: 10px 0;
 }
+.movement-list {
+  display: grid;
+}
+.movement-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  border-top: 1px solid #eef1ed;
+}
+.movement-row small {
+  display: block;
+  margin-top: 4px;
+  color: #8a978e;
+  font-size: var(--text-sm);
+}
+.wallet-total { font-size: 22px; }
+@media (max-width: 520px) {
+  .movement-row { grid-template-columns: minmax(0, 1fr) auto; padding: 15px 18px; }
+  .movement-row .row-actions { grid-column: 2; }
+}
 .footer-note {
   display: flex;
   align-items: center;

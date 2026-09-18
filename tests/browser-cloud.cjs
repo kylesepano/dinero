@@ -222,23 +222,30 @@ const errors = [];
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   assert.equal(stores.a.data.transactions[0].amount, 30075);
-  await page
-    .getByRole("button", { name: "Add transaction", exact: true })
-    .first()
-    .click();
+  await page.getByRole("button", { name: "Debts", exact: true }).click();
+  await page.getByRole("button", { name: "Add debt", exact: true }).click();
   await page.getByRole("button", { name: "I borrowed", exact: true }).click();
   await page.getByLabel("Amount (PHP)").fill("500");
   await page.getByLabel("Time", { exact: true }).fill("09:30");
   await page.getByLabel("Person / note").fill("Ava");
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Add transaction", exact: true })
+    .getByRole("button", { name: "Add debt", exact: true })
     .click();
   await page.getByText("Ava", { exact: true }).waitFor();
   assert.equal(stores.a.data.transactions[1].type, "debt_borrowed");
   assert.equal(stores.a.data.transactions[1].categoryId, undefined);
   assert.equal(stores.a.data.transactions[1].time, "09:30");
   assert.match(await page.getByText(/Sep .*9:30/).first().textContent(), /9:30/);
+  await page.getByRole("button", { name: "Wallet", exact: true }).click();
+  await page.getByRole("button", { name: "Add adjustment", exact: true }).click();
+  await page.getByRole("button", { name: "Add to wallet", exact: true }).click();
+  await page.getByLabel("Amount (PHP)").fill("25");
+  await page.getByLabel("Note").fill("Cash correction");
+  await page.getByRole("dialog").getByRole("button", { name: "Add adjustment", exact: true }).click();
+  await page.getByText("Cash correction", { exact: true }).waitFor();
+  assert.equal(stores.a.data.transactions[2].type, "wallet_add");
+  assert.equal(stores.a.data.transactions[2].categoryId, undefined);
   await page.getByRole("button", { name: "Budget", exact: true }).click();
   await page.getByRole("button", { name: "Set budget", exact: true }).click();
   await page.getByLabel("Monthly spending limit (PHP)").fill("1000");
@@ -457,6 +464,8 @@ const errors = [];
     for (const name of [
       "Dashboard",
       "Transactions",
+      "Debts",
+      "Wallet",
       "Categories",
       "Budget",
       "Settings",

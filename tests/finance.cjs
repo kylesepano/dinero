@@ -32,8 +32,10 @@ assert.equal(totals(edited.transactions.slice(1)).income, 850000)
 const debtFixture = [
  { id:'borrowed', type:'debt_borrowed', amount:50000, date:'2026-09-18', time:'09:30', note:'Sam' },
  { id:'lent', type:'debt_lent', amount:12500, date:'2026-09-18', time:'10:15', note:'Jo' },
+ { id:'wallet-add', type:'wallet_add', amount:2000, date:'2026-09-18', time:'11:00', note:'Cash correction' },
+ { id:'wallet-subtract', type:'wallet_subtract', amount:500, date:'2026-09-18', time:'11:05', note:'Cash correction' },
 ]
-assert.deepEqual(totals(debtFixture), { income:0, expense:0, balance:37500 })
+assert.deepEqual(totals(debtFixture), { income:0, expense:0, balance:39000 })
 assert.match(dateTimeLabel('2026-09-18', '09:30'), /9:30/)
 assert.equal(validateData({ ...freshData(), transactions: debtFixture }), true)
 assert.equal(validateData({ ...freshData(), transactions: [{ ...debtFixture[0], categoryId:'salary' }] }), false)

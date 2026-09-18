@@ -24,6 +24,7 @@ Run these files once, in order, in Supabase SQL Editor:
 1. `supabase/migrations/202609080001_workspace.sql`
 2. `supabase/migrations/202609080002_atomic_workspace.sql`
 3. `supabase/migrations/202609180003_debts_and_times.sql`
+4. `supabase/migrations/202609180004_separate_debt_wallet_pages.sql`
 
 Alternatively link the Supabase CLI and run `supabase db push`. Do not mix manual/CLI migration application without reconciling migration history.
 
@@ -41,9 +42,9 @@ Every table enables/forces RLS, revokes anonymous/public privileges, and has exp
 
 ## Debts and transaction times
 
-Transactions can be recorded as **I borrowed** or **I lent**. Borrowing adds the amount to the wallet balance; lending subtracts it. Debt entries have no category and do not count as income, expenses, category totals, spending charts, or budgets. Each new transaction records the current local time by default, and transaction tables show the saved date and time. Older date-only records remain valid and continue to display their date until they are edited.
+The **Debts** page records **I borrowed** and **I lent** entries. The **Wallet** page records manual additions and deductions. They adjust wallet balance but do not count as income, expenses, category totals, spending charts, or budgets. Each new entry records the current local time by default, and transaction tables show the saved date and time. Older date-only records remain valid and continue to display their date until they are edited.
 
-Apply `202609180003_debts_and_times.sql` before using this release with an existing Supabase project. It extends the existing owner-scoped transaction table and snapshot RPCs without changing prior income, expense, category, or budget records.
+Apply `202609180003_debts_and_times.sql` and `202609180004_separate_debt_wallet_pages.sql` before using this release with an existing Supabase project. They extend the existing owner-scoped data and snapshot RPCs without changing prior income, expense, category, or budget records.
 
 In-memory data changes only after a successful validated response. Failed saves keep forms open. Reload cloud data before retrying an uncertain save: a lost response may mean the server committed. Revision checks prevent duplicate submissions in that case. Requests verify and capture the initiating account's token, so account switching cannot retarget pending writes.
 

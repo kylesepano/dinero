@@ -325,7 +325,7 @@ export function filterTransactions(
         (filter.categoryId === "all" || t.categoryId === filter.categoryId) &&
         (filter.min === null || t.amount >= filter.min) &&
         (filter.max === null || t.amount <= filter.max) &&
-        `${t.note} ${names.get(t.categoryId || "") || (t.type === "debt_borrowed" ? "Borrowed debt" : t.type === "debt_lent" ? "Lent debt" : "")}`
+        `${t.note} ${names.get(t.categoryId || "") || (t.type === "debt_borrowed" ? "Borrowed debt" : t.type === "debt_lent" ? "Lent debt" : t.type === "wallet_add" ? "Wallet adjustment added" : t.type === "wallet_subtract" ? "Wallet adjustment subtracted" : "")}`
           .toLowerCase()
           .includes(query),
     )

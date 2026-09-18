@@ -2,7 +2,9 @@ export type TransactionType =
   | "income"
   | "expense"
   | "debt_borrowed"
-  | "debt_lent";
+  | "debt_lent"
+  | "wallet_add"
+  | "wallet_subtract";
 export type CategoryType = "income" | "expense";
 export interface Category {
   id: string;
