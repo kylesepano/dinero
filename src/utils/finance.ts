@@ -45,10 +45,16 @@ export function totals(transactions: Transaction[]) {
   const subtracted = transactions
     .filter((t) => t.type === "wallet_subtract")
     .reduce((s, t) => s + t.amount, 0);
+  const debtPayments = transactions
+    .filter((t) => t.type === "debt_repayment_paid")
+    .reduce((s, t) => s - t.amount, 0) +
+    transactions
+      .filter((t) => t.type === "debt_repayment_received")
+      .reduce((s, t) => s + t.amount, 0);
   return {
     income,
     expense,
-    balance: income - expense + borrowed - lent + added - subtracted,
+    balance: income - expense + borrowed - lent + added - subtracted + debtPayments,
   };
 }
 export function dailyTotals(transactions: Transaction[], month: string) {

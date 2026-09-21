@@ -4,7 +4,9 @@ export type TransactionType =
   | "debt_borrowed"
   | "debt_lent"
   | "wallet_add"
-  | "wallet_subtract";
+  | "wallet_subtract"
+  | "debt_repayment_paid"
+  | "debt_repayment_received";
 export type CategoryType = "income" | "expense";
 export interface Category {
   id: string;
@@ -21,6 +23,7 @@ export interface Transaction {
   date: string;
   /** Local time selected when the transaction was recorded (HH:mm). */
   time?: string;
+  debtId?: string;
   note: string;
 }
 export interface Budget {

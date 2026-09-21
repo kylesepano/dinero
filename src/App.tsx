@@ -154,6 +154,7 @@ export default function App({
   >(undefined);
   const [debt, setDebt] = useState<Transaction | null | undefined>(undefined);
   const [adjustment, setAdjustment] = useState<Transaction | null | undefined>(undefined);
+  const [repaymentFor, setRepaymentFor] = useState<Transaction | undefined>(undefined);
   const [editingCategory, setEditingCategory] = useState<
     Category | null | undefined
   >(undefined);
@@ -174,6 +175,9 @@ export default function App({
   );
   const adjustments = data.transactions.filter(
     (t) => t.type === "wallet_add" || t.type === "wallet_subtract",
+  );
+  const repayments = data.transactions.filter(
+    (t) => t.type === "debt_repayment_paid" || t.type === "debt_repayment_received",
   );
   const monthly = financialTransactions.filter((t) => t.date.startsWith(month));
   const summary = totals(monthly);
@@ -637,6 +641,7 @@ export default function App({
                     setTransaction(undefined);
                     setDebt(undefined);
                     setAdjustment(undefined);
+                    setRepaymentFor(undefined);
                     setEditingCategory(undefined);
                     setBudgetEditing(false);
                     setConfirmation(null);
@@ -815,7 +820,9 @@ export default function App({
                 </div>
                 {debts.length ? <div className="movement-list">{[...debts].sort((a,b) => `${b.date}${b.time || ""}`.localeCompare(`${a.date}${a.time || ""}`)).map((t) => {
                   const borrowed = t.type === "debt_borrowed";
-                  return <div className="movement-row" key={t.id}><div><strong>{t.note || (borrowed ? "Money borrowed" : "Money lent")}</strong><small>{borrowed ? "Money borrowed" : "Money lent"} · {dateTimeLabel(t.date, t.time)}</small></div><strong className={borrowed ? "positive" : ""}>{borrowed ? "+" : "−"}{fmt(t.amount)}</strong><div className="row-actions"><button className="icon-button" aria-label={`Edit ${t.note || "debt entry"}`} onClick={() => setDebt(t)}><Pencil size={15}/></button><button className="icon-button" aria-label={`Delete ${t.note || "debt entry"}`} onClick={() => removeDebt(t)}><Trash2 size={15}/></button></div></div>;
+                  const paid = repayments.filter((payment) => payment.debtId === t.id).reduce((sum, payment) => sum + payment.amount, 0);
+                  const remaining = Math.max(0, t.amount - paid);
+                  return <div className="movement-row" key={t.id}><div><strong>{t.note || (borrowed ? "Money borrowed" : "Money lent")}</strong><small>{borrowed ? "Money borrowed" : "Money lent"} · {dateTimeLabel(t.date, t.time)} · {remaining ? `${fmt(remaining)} remaining` : "Paid"}</small></div><strong className={borrowed ? "positive" : ""}>{borrowed ? "+" : "−"}{fmt(t.amount)}</strong><div className="row-actions">{remaining > 0 && <button className="button secondary debt-payment" onClick={() => setRepaymentFor(t)}>Record payment</button>}<button className="icon-button" aria-label={`Edit ${t.note || "debt entry"}`} onClick={() => setDebt(t)}><Pencil size={15}/></button><button className="icon-button" aria-label={`Delete ${t.note || "debt entry"}`} onClick={() => removeDebt(t)}><Trash2 size={15}/></button></div></div>;
                 })}</div> : <div className="empty"><Wallet size={30}/><h3>No debts here yet</h3><p>Add a borrowed or lent amount to keep it separate from transactions.</p></div>}
               </section>
             )}
@@ -1091,6 +1098,22 @@ export default function App({
             }}
           />
         )}
+        {repaymentFor && (
+          <TransactionForm
+            transaction={null}
+            categories={data.categories}
+            currency={data.settings.currency}
+            mode="repayment"
+            repaymentType={repaymentFor.type === "debt_borrowed" ? "debt_repayment_paid" : "debt_repayment_received"}
+            debtId={repaymentFor.id}
+            maxAmount={Math.max(0, repaymentFor.amount - repayments.filter((payment) => payment.debtId === repaymentFor.id).reduce((sum, payment) => sum + payment.amount, 0))}
+            onClose={() => setRepaymentFor(undefined)}
+            onSave={async (t) => {
+              const saved = await update({ ...data, transactions: [...data.transactions, t] });
+              if (saved) setRepaymentFor(undefined);
+            }}
+          />
+        )}
         {editingCategory !== undefined && (
           <CategoryForm
             category={editingCategory}
@@ -1169,22 +1192,29 @@ function TransactionForm({
   categories,
   currency,
   mode = "transaction",
+  repaymentType,
+  debtId,
+  maxAmount,
   onClose,
   onSave,
 }: {
   transaction: Transaction | null;
   categories: Category[];
   currency: string;
-  mode?: "transaction" | "debt" | "wallet";
+  mode?: "transaction" | "debt" | "wallet" | "repayment";
+  repaymentType?: "debt_repayment_paid" | "debt_repayment_received";
+  debtId?: string;
+  maxAmount?: number;
   onClose: () => void;
   onSave: (t: Transaction) => void;
 }) {
-  const allowedTypes: Record<typeof mode, readonly TransactionType[]> = {
+  const modes: Record<Exclude<typeof mode, "repayment">, readonly TransactionType[]> = {
     transaction: ["expense", "income"],
     debt: ["debt_borrowed", "debt_lent"],
     wallet: ["wallet_add", "wallet_subtract"],
   };
-  const [type, setType] = useState<TransactionType>(transaction?.type || allowedTypes[mode][0]);
+  const allowedTypes = mode === "repayment" ? [repaymentType!] : modes[mode];
+  const [type, setType] = useState<TransactionType>(transaction?.type || allowedTypes[0]);
   const [amount, setAmount] = useState(
     transaction ? (transaction.amount / 100).toFixed(2) : "",
   );
@@ -1207,6 +1237,10 @@ function TransactionForm({
       );
       return;
     }
+    if (maxAmount !== undefined && value > maxAmount) {
+      setError("Payment cannot exceed the remaining debt.");
+      return;
+    }
     if (financial && !categories.some((c) => c.id === categoryId && c.type === type)) {
       setError("Choose a category. You can create one on the Categories page.");
       return;
@@ -1216,6 +1250,7 @@ function TransactionForm({
       type,
       amount: value,
       ...(financial ? { categoryId } : {}),
+      ...(debtId ? { debtId } : {}),
       date,
       time,
       note: note.trim(),
@@ -1223,12 +1258,12 @@ function TransactionForm({
   }
   return (
     <Modal
-      title={transaction ? `Edit ${mode === "debt" ? "debt" : mode === "wallet" ? "wallet adjustment" : "transaction"}` : mode === "debt" ? "Add debt" : mode === "wallet" ? "Add wallet adjustment" : "Add transaction"}
+      title={transaction ? `Edit ${mode === "debt" ? "debt" : mode === "wallet" ? "wallet adjustment" : "transaction"}` : mode === "debt" ? "Add debt" : mode === "wallet" ? "Add wallet adjustment" : mode === "repayment" ? "Record debt payment" : "Add transaction"}
       onClose={onClose}
     >
       <form onSubmit={submit}>
         <div className="segmented">
-          {allowedTypes[mode].map((t) => (
+          {allowedTypes.map((t) => (
             <button
               key={t}
               type="button"
@@ -1257,7 +1292,7 @@ function TransactionForm({
                       ? "I lent"
                       : t === "wallet_add"
                         ? "Add to wallet"
-                        : "Subtract from wallet"}
+                        : t === "wallet_subtract" ? "Subtract from wallet" : t === "debt_repayment_paid" ? "Pay borrowed debt" : "Receive lent debt payment"}
             </button>
           ))}
         </div>
@@ -1269,6 +1304,7 @@ function TransactionForm({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
+            max={maxAmount ? (maxAmount / 100).toFixed(2) : undefined}
             required
           />
         </label>
@@ -1301,7 +1337,7 @@ function TransactionForm({
                   ? "Subtracts this amount from your wallet without counting it as an expense."
                   : type === "wallet_add"
                     ? "Adds this amount to your wallet without counting it as income."
-                    : "Subtracts this amount from your wallet without counting it as an expense."}
+                    : type === "debt_repayment_paid" ? "Reduces your wallet as you repay money you borrowed." : type === "debt_repayment_received" ? "Adds to your wallet as someone repays money you lent." : "Subtracts this amount from your wallet without counting it as an expense."}
             </div>
           )}
           <label>
@@ -1348,8 +1384,10 @@ function TransactionForm({
               ? "Save changes"
               : mode === "debt"
                 ? "Add debt"
-                : mode === "wallet"
-                  ? "Add adjustment"
+                  : mode === "wallet"
+                    ? "Add adjustment"
+                    : mode === "repayment"
+                      ? "Record payment"
                   : "Add transaction"}
           </button>
         </div>

@@ -27,6 +27,9 @@ export function prepareImport(source: AppData): AppData {
   const ids = new Map(
     source.categories.map((c) => [c.id, crypto.randomUUID()]),
   );
+  const transactionIds = new Map(
+    source.transactions.map((t) => [t.id, crypto.randomUUID()]),
+  );
   return {
     ...source,
     settings: { ...source.settings },
@@ -40,8 +43,9 @@ export function prepareImport(source: AppData): AppData {
     })),
     transactions: source.transactions.map((t) => ({
       ...t,
-      id: crypto.randomUUID(),
+      id: transactionIds.get(t.id)!,
       ...(t.categoryId ? { categoryId: ids.get(t.categoryId)! } : {}),
+      ...(t.debtId ? { debtId: transactionIds.get(t.debtId)! } : {}),
     })),
   };
 }
@@ -70,7 +74,7 @@ export async function fingerprint(data: AppData) {
       .map((c) => [c.id, c.name, c.type, c.color, c.icon ?? null]),
     transactions: [...data.transactions]
       .sort((a, b) => a.id.localeCompare(b.id))
-      .map((t) => [t.id, t.type, t.amount, t.categoryId ?? null, t.date, t.time ?? null, t.note]),
+      .map((t) => [t.id, t.type, t.amount, t.categoryId ?? null, t.date, t.time ?? null, t.debtId ?? null, t.note]),
     budgets: [...data.budgets]
       .sort((a, b) => a.month.localeCompare(b.month))
       .map((b) => [b.month, b.amount]),

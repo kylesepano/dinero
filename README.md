@@ -25,6 +25,7 @@ Run these files once, in order, in Supabase SQL Editor:
 2. `supabase/migrations/202609080002_atomic_workspace.sql`
 3. `supabase/migrations/202609180003_debts_and_times.sql`
 4. `supabase/migrations/202609180004_separate_debt_wallet_pages.sql`
+5. `supabase/migrations/202609210005_debt_repayments.sql`
 
 Alternatively link the Supabase CLI and run `supabase db push`. Do not mix manual/CLI migration application without reconciling migration history.
 

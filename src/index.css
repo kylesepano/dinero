@@ -737,9 +737,17 @@ tr:last-child td {
   font-size: var(--text-sm);
 }
 .wallet-total { font-size: 22px; }
+.debt-payment { font-size: var(--text-sm); padding: 7px 9px; }
 @media (max-width: 520px) {
   .movement-row { grid-template-columns: minmax(0, 1fr) auto; padding: 15px 18px; }
   .movement-row .row-actions { grid-column: 2; }
+}
+@media (max-width: 480px) {
+  .sidebar { height: 58px; min-height: 58px; padding-block: 4px; }
+  .sidebar nav { justify-content: space-between; }
+  .nav-item { flex: 1 1 0; padding: 8px 2px; min-width: 0; }
+  .nav-item span:not(.nav-dot) { display: none; }
+  .main-shell { padding-bottom: 66px; }
 }
 .footer-note {
   display: flex;

@@ -56,7 +56,11 @@ export function validateData(v: unknown): v is AppData {
       t.type === "debt_borrowed" ||
       t.type === "debt_lent" ||
       t.type === "wallet_add" ||
-      t.type === "wallet_subtract";
+      t.type === "wallet_subtract" ||
+      t.type === "debt_repayment_paid" ||
+      t.type === "debt_repayment_received";
+    const repayment =
+      t.type === "debt_repayment_paid" || t.type === "debt_repayment_received";
     if (
       !record(t) ||
       typeof t.id !== "string" ||
@@ -70,7 +74,9 @@ export function validateData(v: unknown): v is AppData {
       (!financial && !nonFinancial) ||
       (financial &&
         !v.categories.some((c) => c.id === t.categoryId && c.type === t.type)) ||
-      (nonFinancial && t.categoryId !== undefined)
+      (nonFinancial && t.categoryId !== undefined) ||
+      (repayment && (typeof t.debtId !== "string" || !t.debtId)) ||
+      (!repayment && t.debtId !== undefined)
     )
       return false;
     total += Number(t.amount);
