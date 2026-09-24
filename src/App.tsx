@@ -26,6 +26,7 @@ import {
   Car,
   House,
   Heart,
+  HandCoins,
   Sparkles,
 } from "lucide-react";
 import type { Category, CategoryType, Transaction, TransactionType } from "./types";
@@ -71,7 +72,7 @@ type Page =
 const nav = [
   { name: "Dashboard", icon: LayoutDashboard },
   { name: "Transactions", icon: ArrowLeftRight },
-  { name: "Debts", icon: ArrowLeftRight },
+  { name: "Debts", icon: HandCoins },
   { name: "Wallet", icon: Wallet },
   { name: "Categories", icon: Shapes },
   { name: "Budget", icon: ChartNoAxesCombined },
