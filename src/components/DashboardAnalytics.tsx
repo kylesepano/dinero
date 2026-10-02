@@ -23,7 +23,7 @@ import {
   type DateRange,
   type Grouping,
 } from "../utils/analytics";
-import { dateLabel, money, monthLabel, today } from "../utils/finance";
+import { dateLabel, money, monthLabel, today, totals } from "../utils/finance";
 import TimeSeriesChart from "./TimeSeriesChart";
 import CategoryBreakdown from "./CategoryBreakdown";
 
@@ -82,6 +82,7 @@ export default function DashboardAnalytics({
     };
   }, [data, range, grouping]);
   const format = (amount: number) => money(amount, data.settings.currency);
+  const walletBalance = totals(data.transactions).balance;
   const budgetMonth =
     range.start.slice(0, 7) === range.end.slice(0, 7)
       ? range.start.slice(0, 7)
@@ -133,6 +134,14 @@ export default function DashboardAnalytics({
       )}
       <div className="stats-grid">
         {[
+          {
+            name: "Total wallet balance",
+            value: walletBalance,
+            previous: null,
+            icon: Wallet,
+            style: "balance",
+            subtitle: "All recorded activity, independent of this period",
+          },
           {
             name: "Total income",
             value: analysis.summary.income,
