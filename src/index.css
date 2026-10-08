@@ -1894,6 +1894,20 @@ fieldset:disabled {
 .active-range small {
   display: block;
 }
+.overall-wallet {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: max-content;
+  padding: 9px 12px;
+  border: 1px solid #d8e8dd;
+  border-radius: 8px;
+  background: #f1f8f2;
+  color: #4c8768;
+}
+.overall-wallet span { display: grid; gap: 2px; }
+.overall-wallet small { color: #6c8273; font-size: var(--text-sm); }
+.overall-wallet strong { color: #315c46; font-size: var(--text-base); }
 .custom-range {
   margin-top: 12px;
 }

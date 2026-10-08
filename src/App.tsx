@@ -681,6 +681,8 @@ export default function App({
                 key={range.start + range.end + range.preset}
                 range={range}
                 onChange={changeRange}
+                walletTotal={page === "Dashboard" ? totals(data.transactions).balance : undefined}
+                currency={data.settings.currency}
               />
             )}
             {page === "Budget" && (

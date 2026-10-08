@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { CalendarDays } from "lucide-react";
-import { dateLabel, today } from "../utils/finance";
+import { CalendarDays, Wallet } from "lucide-react";
+import { dateLabel, money, today } from "../utils/finance";
 import {
   presets,
   presetRange,
@@ -12,9 +12,13 @@ import {
 export default function DateRangeFilter({
   range,
   onChange,
+  walletTotal,
+  currency,
 }: {
   range: AnalyticsRange;
   onChange: (range: AnalyticsRange) => void;
+  walletTotal?: number;
+  currency?: string;
 }) {
   const [preset, setPreset] = useState<Preset>(range.preset);
   const [start, setStart] = useState(range.start);
@@ -56,6 +60,15 @@ export default function DateRangeFilter({
             </small>
           </span>
         </p>
+        {walletTotal !== undefined && currency && (
+          <div className="overall-wallet" aria-label="Total wallet balance">
+            <Wallet size={18} />
+            <span>
+              <small>Total wallet balance</small>
+              <strong>{money(walletTotal, currency)}</strong>
+            </span>
+          </div>
+        )}
       </div>
       {preset === "custom" && (
         <form
